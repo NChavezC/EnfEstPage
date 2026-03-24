@@ -84,7 +84,7 @@ export default function Home() {
       {/* Highlight section */}
       <section className="bg-white">
         <div className="mx-auto grid max-w-7xl gap-8 px-6 py-16 md:grid-cols-3">
-          <div className="rounded-2xl bg-pink-100 p-6 shadow-sm">
+          <div className="rounded-2xl bg-rose-100 p-6 shadow-sm">
             <h3 className="text-lg font-semibold text-gray-900">
               Atención profesional
             </h3>
@@ -102,7 +102,7 @@ export default function Home() {
             </p>
           </div>
 
-          <div className="rounded-2xl bg-pink-100 p-6 shadow-sm">
+          <div className="rounded-2xl bg-rose-100 p-6 shadow-sm">
             <h3 className="text-lg font-semibold text-gray-900">
               Acompañamiento personalizado
             </h3>
