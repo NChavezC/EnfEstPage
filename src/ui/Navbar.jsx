@@ -5,7 +5,7 @@ function Navbar() {
   return (
     <nav className="bg-white shadow-md">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center h-20">
+        <div className="ml-0 sm:ml-6 flex flex-wrap gap-2 sm:space-x-4">
           {/* Logo on the upper-left */}
           <div>
             <Logo />
