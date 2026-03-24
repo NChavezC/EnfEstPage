@@ -5,14 +5,14 @@ function Navbar() {
   return (
     <nav className="bg-white shadow-md">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="ml-0 sm:ml-6 flex flex-wrap gap-2 sm:space-x-4">
-          {/* Logo on the upper-left */}
-          <div>
+        <div className="flex flex-col items-center sm:flex-row sm:items-center sm:justify-between h-auto py-3 sm:h-20">
+          {/* Logo */}
+          <div className="flex justify-center w-full sm:w-auto">
             <Logo />
           </div>
 
-          {/* Space between logo and links */}
-          <div className="ml-6 flex space-x-4">
+          {/* Links */}
+          <div className="mt-3 sm:mt-0 flex flex-wrap justify-center gap-2 sm:gap-4">
             <NavLink
               to="/home"
               className={({ isActive }) =>
@@ -34,6 +34,7 @@ function Navbar() {
             >
               Antes y Después
             </NavLink>
+
             <NavLink
               to="/contact"
               className={({ isActive }) =>
