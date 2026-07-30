@@ -1,3 +1,73 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@layer base {
+  :root {
+    /* Primary brand colors */
+    --color-primary: #db2777;
+    --color-primary-hover: #be185d;
+    --color-primary-dark: #9d174d;
+
+    /* Backgrounds and surfaces */
+    --color-background: #fdf2f8;
+    --color-surface: #ffffff;
+    --color-surface-soft: #ffe4e6;
+    --color-highlight: #fbcfe8;
+
+    /* Typography */
+    --color-heading: #111827;
+    --color-body: #374151;
+    --color-muted: #4b5563;
+
+    /* Borders and interactive states */
+    --color-border: #f9a8d4;
+    --color-focus: #db2777;
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    margin: 0;
+    min-width: 320px;
+    min-height: 100vh;
+    background-color: var(--color-background);
+    color: var(--color-body);
+    font-synthesis: none;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    color: var(--color-heading);
+  }
+
+  a {
+    color: inherit;
+  }
+
+  button,
+  input,
+  textarea,
+  select {
+    font: inherit;
+  }
+
+  ::selection {
+    background-color: var(--color-highlight);
+    color: var(--color-primary-dark);
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-focus);
+    outline-offset: 3px;
+  }
+}
