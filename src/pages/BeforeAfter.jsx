@@ -1,24 +1,21 @@
 const results = [
   {
-    title: "Armonización facial",
-    before:
-      "https://images.unsplash.com/photo-1488426862026-3ee34a7d66df?auto=format&fit=crop&w=900&q=80",
-    after:
-      "https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=900&q=80",
+    title: "Limpieza facial profunda",
+    description:
+      "Resultado posterior a una limpieza facial profunda, orientada a mejorar la apariencia, hidratación y suavidad de la piel.",
+    image: "/beforeafter/ba1.png",
   },
   {
-    title: "Perfilado de labios",
-    before:
-      "https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&w=900&q=80",
-    after:
-      "https://images.unsplash.com/photo-1524504388940-b1c1722653e1?auto=format&fit=crop&w=900&q=80",
+    title: "Extracción de puntos negros",
+    description:
+      "Comparación del aspecto de la zona nasal antes y después de la extracción de impurezas.",
+    image: "/beforeafter/ba2.png",
   },
   {
-    title: "Rejuvenecimiento facial",
-    before:
-      "https://images.unsplash.com/photo-1529626455594-4ff0802cfb7e?auto=format&fit=crop&w=900&q=80",
-    after:
-      "https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=900&q=80",
+    title: "Mejora de textura y cicatrices de acné",
+    description:
+      "Evolución de la textura cutánea y la apariencia de cicatrices de acné después del tratamiento.",
+    image: "/beforeafter/ba3.png",
   },
 ];
 
@@ -32,13 +29,13 @@ export default function BeforeAfter() {
           </h1>
 
           <p className="mt-4 text-[var(--color-muted)]">
-            Algunos ejemplos visuales del tipo de resultados que se pueden
-            lograr con un tratamiento profesional y personalizado.
+            Conoce algunos resultados reales obtenidos mediante tratamientos
+            estéticos profesionales y personalizados.
           </p>
 
           <p className="mt-2 text-sm text-[var(--color-muted)]">
-            * Imágenes referenciales de muestra para completar la maqueta del
-            sitio.
+            Los resultados pueden variar según las características y necesidades
+            de cada paciente.
           </p>
         </div>
 
@@ -46,38 +43,25 @@ export default function BeforeAfter() {
           {results.map((item, index) => (
             <article
               key={`${item.title}-${index}`}
-              className="rounded-3xl border border-[var(--color-border)] bg-[var(--color-surface)] p-6 shadow-lg"
+              className="overflow-hidden rounded-3xl border border-[var(--color-border)] bg-[var(--color-surface)] shadow-lg"
             >
-              <h2 className="mb-6 text-2xl font-semibold text-[var(--color-primary-hover)]">
-                {item.title}
-              </h2>
+              <div className="p-6 md:p-8">
+                <h2 className="text-2xl font-semibold text-[var(--color-primary-hover)]">
+                  {item.title}
+                </h2>
 
-              <div className="grid gap-6 md:grid-cols-2">
-                <div>
-                  <p className="mb-3 text-sm font-medium uppercase tracking-wide text-[var(--color-muted)]">
-                    Antes
-                  </p>
+                <p className="mt-3 max-w-3xl leading-relaxed text-[var(--color-muted)]">
+                  {item.description}
+                </p>
+              </div>
 
-                  <img
-                    src={item.before}
-                    alt={`${item.title} antes`}
-                    className="h-80 w-full rounded-2xl object-cover"
-                    loading="lazy"
-                  />
-                </div>
-
-                <div>
-                  <p className="mb-3 text-sm font-medium uppercase tracking-wide text-[var(--color-muted)]">
-                    Después
-                  </p>
-
-                  <img
-                    src={item.after}
-                    alt={`${item.title} después`}
-                    className="h-80 w-full rounded-2xl object-cover"
-                    loading="lazy"
-                  />
-                </div>
+              <div className="border-t border-[var(--color-border)] bg-black/5 p-4 md:p-6">
+                <img
+                  src={item.image}
+                  alt={`Comparación de antes y después: ${item.title}`}
+                  className="mx-auto max-h-[750px] w-full rounded-2xl object-contain"
+                  loading={index === 0 ? "eager" : "lazy"}
+                />
               </div>
             </article>
           ))}
