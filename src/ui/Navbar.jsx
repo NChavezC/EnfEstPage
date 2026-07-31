@@ -1,4 +1,4 @@
-import { NavLink } from "react-router-dom";
+import { Link, NavLink } from "react-router-dom";
 import Logo from "../ui/Logo";
 
 function Navbar() {
@@ -16,7 +16,13 @@ function Navbar() {
         <div className="flex h-auto flex-col items-center py-3 sm:h-20 sm:flex-row sm:justify-between">
           {/* Logo */}
           <div className="flex w-full justify-center sm:w-auto">
-            <Logo />
+            <Link
+              to="/home"
+              aria-label="Ir a la página de inicio"
+              className="flex items-center justify-center"
+            >
+              <Logo />
+            </Link>
           </div>
 
           {/* Navigation links */}

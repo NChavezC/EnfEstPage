@@ -1,6 +1,19 @@
+import ImageCarousel from "../ui/ImageCarousel";
 import services from "../data/services.json";
 
 export default function Home() {
+  const carouselImages = [
+    {
+      src: "/carrusel/c1.png",
+    },
+    {
+      src: "/carrusel/c2.png",
+    },
+    {
+      src: "/carrusel/c3.png",
+    },
+  ];
+
   return (
     <div className="bg-[var(--color-background)]">
       {/* Hero */}
@@ -40,10 +53,10 @@ export default function Home() {
 
             <div className="flex justify-center">
               <div className="w-full max-w-md rounded-3xl bg-[var(--color-surface)] p-4 shadow-xl">
-                <img
-                  src="https://images.unsplash.com/photo-1515377905703-c4788e51af15?auto=format&fit=crop&w=1000&q=80"
-                  alt="Tratamiento estético"
-                  className="h-[420px] w-full rounded-2xl object-cover"
+                <ImageCarousel
+                  images={carouselImages}
+                  autoPlayInterval={5000}
+                  ariaLabel="Galería de Enfermera Estética"
                 />
               </div>
             </div>
