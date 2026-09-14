@@ -1,6 +1,7 @@
+from decimal import Decimal
+
 from api.callback import TuuCallbackError, validate_callback
 from api.schemas import PaymentResultRequest, PaymentResultResponse
-
 
 class PaymentResultError(Exception):
     """
@@ -32,7 +33,7 @@ def verify_payment_result(
         valid=True,
         result=payment_result.x_result,
         reference=payment_result.x_reference,
-        amount=int(payment_result.x_amount),
+        amount=int(Decimal(payment_result.x_amount)),
         currency=payment_result.x_currency,
         message=payment_result.x_message,
         timestamp=payment_result.x_timestamp,

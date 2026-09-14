@@ -1,6 +1,7 @@
 import logging
 from typing import Dict
 from urllib.parse import parse_qs
+from decimal import Decimal, InvalidOperation
 
 from api.config import settings
 from api.payment import CURRENCY, DEPOSIT_AMOUNT
@@ -51,12 +52,14 @@ def validate_callback(payload: Dict[str, str]) -> None:
         raise TuuCallbackError("Account ID inválido.")
 
     try:
-        amount = int(payload.get("x_amount", ""))
-    except ValueError as error:
+        amount = Decimal(payload.get("x_amount", ""))
+    except InvalidOperation as error:
         raise TuuCallbackError("Monto inválido.") from error
 
-    if amount != DEPOSIT_AMOUNT:
-        raise TuuCallbackError("El monto no corresponde al abono esperado.")
+    if amount != Decimal(DEPOSIT_AMOUNT):
+        raise TuuCallbackError(
+            "El monto no corresponde al abono esperado."
+        )
 
     if payload.get("x_currency") != CURRENCY:
         raise TuuCallbackError("Moneda inválida.")
