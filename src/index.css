@@ -5,24 +5,24 @@
 @layer base {
   :root {
     /* Primary brand colors */
-    --color-primary: #db2777;
-    --color-primary-hover: #be185d;
-    --color-primary-dark: #9d174d;
+    --color-primary: #c08fa2;
+    --color-primary-hover: #a2697f;
+    --color-primary-dark: #a2697f;
 
     /* Backgrounds and surfaces */
-    --color-background: #fdf2f8;
+    --color-background: #f8f3f5;
     --color-surface: #ffffff;
-    --color-surface-soft: #ffe4e6;
-    --color-highlight: #fbcfe8;
+    --color-surface-soft: #e4cadb;
+    --color-highlight: #e4cadb;
 
     /* Typography */
-    --color-heading: #111827;
-    --color-body: #374151;
-    --color-muted: #4b5563;
+    --color-heading: #694b3d;
+    --color-body: #694b3d;
+    --color-muted: #8a7167;
 
     /* Borders and interactive states */
-    --color-border: #f9a8d4;
-    --color-focus: #db2777;
+    --color-border: #c08fa2;
+    --color-focus: #a2697f;
   }
 
   html {
