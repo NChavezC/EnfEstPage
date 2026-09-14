@@ -1,0 +1,3 @@
+fastapi[standard]>=0.128.7,<0.129.0
+httpx>=0.28.1,<1.0.0
+pydantic-settings>=2.11.0,<2.12.0
