@@ -1,4 +1,7 @@
 from fastapi import FastAPI, HTTPException, Request, Response
+import logging
+
+logger = logging.getLogger(__name__)
 
 from api.callback import (
     TuuCallbackError,
@@ -59,6 +62,15 @@ async def tuu_callback_endpoint(
         process_callback(payload)
 
     except TuuCallbackError as error:
+        logger.warning(
+            "Callback TUU rechazado: error=%s reference=%s amount=%s result=%s keys=%s",
+            str(error),
+            payload.get("x_reference"),
+            payload.get("x_amount"),
+            payload.get("x_result"),
+            sorted(payload.keys()),
+        )
+
         raise HTTPException(
             status_code=400,
             detail=str(error),

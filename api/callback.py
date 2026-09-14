@@ -26,7 +26,10 @@ def parse_callback_body(body: bytes) -> Dict[str, str]:
     """
 
     decoded_body = body.decode("utf-8")
-    parsed = parse_qs(decoded_body)
+    parsed = parse_qs(
+        decoded_body,
+        keep_blank_values=True,
+    )
 
     return {
         key: values[0]
