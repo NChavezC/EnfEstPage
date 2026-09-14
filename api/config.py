@@ -13,6 +13,7 @@ class Settings(BaseSettings):
     tuu_account_id: str
     tuu_secret_key: SecretStr
     app_base_url: str
+    deposit_amount: int = 10_000
 
     model_config = SettingsConfigDict(
         env_file=PROJECT_ROOT / ".env.local",

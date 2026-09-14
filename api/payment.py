@@ -9,7 +9,7 @@ from api.schemas import PaymentCreateResponse, PaymentRequest
 from api.tuu import generate_signature
 
 
-DEPOSIT_AMOUNT = 10_000
+DEPOSIT_AMOUNT = settings.deposit_amount
 CURRENCY = "CLP"
 SHOP_NAME = "Enfermera Estetica"
 

@@ -7,6 +7,10 @@ const initialForm = {
   phone: "",
 };
 
+const DEPOSIT_AMOUNT = Number(import.meta.env.VITE_DEPOSIT_AMOUNT || 10_000);
+
+const formattedDepositAmount = DEPOSIT_AMOUNT.toLocaleString("es-CL");
+
 export default function Payment() {
   const [form, setForm] = useState(initialForm);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -67,8 +71,11 @@ export default function Payment() {
 
           <p className="mt-4 text-[var(--color-muted)]">
             Para reservar tu hora, realiza un abono fijo de{" "}
-            <strong className="text-[var(--color-heading)]">$10.000</strong>. El
-            monto se descuenta del valor final de tu tratamiento.
+            <strong className="text-[var(--color-heading)]">
+              {" "}
+              ${formattedDepositAmount}
+            </strong>
+            . El monto se descuenta del valor final de tu tratamiento.
           </p>
 
           <div className="mt-8 rounded-2xl bg-[var(--color-surface-soft)] p-5">
@@ -78,7 +85,7 @@ export default function Payment() {
               </span>
 
               <span className="text-2xl font-bold text-[var(--color-primary-dark)]">
-                $10.000
+                ${formattedDepositAmount}
               </span>
             </div>
           </div>
@@ -153,7 +160,9 @@ export default function Payment() {
               disabled={isSubmitting}
               className="w-full rounded-xl bg-[var(--color-primary)] px-6 py-3 font-semibold text-white shadow-md transition-colors hover:bg-[var(--color-primary-hover)] disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {isSubmitting ? "Conectando con TUU..." : "Pagar $10.000"}
+              {isSubmitting
+                ? "Conectando con TUU..."
+                : `Pagar $${formattedDepositAmount}`}
             </button>
           </form>
 

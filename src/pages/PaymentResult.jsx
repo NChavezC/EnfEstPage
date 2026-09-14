@@ -88,7 +88,9 @@ export default function PaymentResult() {
 
               <p className="mt-4 text-[var(--color-muted)]">
                 Tu abono de{" "}
-                <strong className="text-[var(--color-heading)]">$10.000</strong>{" "}
+                <strong className="text-[var(--color-heading)]">
+                  ${payment.amount.toLocaleString("es-CL")}
+                </strong>{" "}
                 fue procesado correctamente.
               </p>
 
