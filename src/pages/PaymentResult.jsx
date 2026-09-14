@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 
 export default function PaymentResult() {
   const [status, setStatus] = useState("loading");
@@ -95,6 +96,12 @@ export default function PaymentResult() {
               </p>
 
               <PaymentDetails payment={payment} />
+              <Link
+                to="/home"
+                className="mt-8 inline-block rounded-xl bg-[var(--color-primary)] px-6 py-3 font-semibold text-white shadow-md transition-colors hover:bg-[var(--color-primary-hover)]"
+              >
+                Volver a Home
+              </Link>
             </>
           )}
 
