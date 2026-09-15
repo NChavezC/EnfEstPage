@@ -31,6 +31,10 @@ function Navbar() {
               Home
             </NavLink>
 
+            <NavLink to="/catalogo" className={getLinkClasses}>
+              Catálogo
+            </NavLink>
+
             <NavLink to="/before-after" className={getLinkClasses}>
               Antes y Después
             </NavLink>

@@ -71,3 +71,23 @@
     outline-offset: 3px;
   }
 }
+
+.catalog-page {
+  width: 100%;
+  height: calc(100vh - 80px);
+  overflow: hidden;
+  background: #fff;
+}
+
+.catalog-frame {
+  width: 100%;
+  height: 100%;
+  border: 0;
+  display: block;
+}
+
+@media (max-width: 768px) {
+  .catalog-page {
+    height: calc(100vh - 70px);
+  }
+}
