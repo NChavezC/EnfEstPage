@@ -4,7 +4,7 @@ import Logo from "../ui/Logo";
 function Navbar() {
   const getLinkClasses = ({ isActive }) =>
     [
-      "rounded-md px-3 py-2 text-sm font-medium transition-colors",
+      "whitespace-nowrap rounded-md px-[clamp(0.25rem,1.5vw,0.75rem)] py-2 text-[clamp(0.75rem,2.6vw,0.875rem)] font-medium transition-colors",
       isActive
         ? "bg-[var(--color-highlight)] text-[var(--color-primary-dark)]"
         : "text-[var(--color-body)] hover:bg-[var(--color-background)] hover:text-[var(--color-primary-hover)]",
@@ -26,7 +26,7 @@ function Navbar() {
           </div>
 
           {/* Navigation links */}
-          <div className="mt-3 flex flex-wrap justify-center gap-2 sm:mt-0 sm:gap-4">
+          <div className="mt-3 flex w-full flex-wrap justify-center gap-x-[clamp(0.125rem,1vw,1rem)] gap-y-1 sm:mt-0 sm:w-auto">
             <NavLink to="/home" className={getLinkClasses}>
               Home
             </NavLink>
