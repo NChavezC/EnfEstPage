@@ -9,5 +9,19 @@
       "source": "/((?!api).*)",
       "destination": "/index.html"
     }
+  ],
+  "regions": [
+    "gru1"
+  ],
+  "functions": {
+    "api/index.py": {
+      "maxDuration": 60
+    }
+  },
+  "crons": [
+    {
+      "path": "/api/agenda/jobs/run",
+      "schedule": "0 12 * * *"
+    }
   ]
 }

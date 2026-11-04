@@ -36,10 +36,10 @@ export default function Home() {
 
               <div className="mt-8 flex flex-wrap gap-4">
                 <a
-                  href="/contact"
+                  href="/reservar"
                   className="rounded-xl bg-[var(--color-primary)] px-6 py-3 text-sm font-semibold text-white shadow-md transition-colors hover:bg-[var(--color-primary-hover)]"
                 >
-                  Agenda tu evaluación
+                  Reserva tu tratamiento
                 </a>
 
                 <a

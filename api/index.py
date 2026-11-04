@@ -98,3 +98,15 @@ def verify_payment_result_endpoint(
             status_code=400,
             detail=str(error),
         ) from error
+
+from api.agenda.router import router as agenda_router
+app.include_router(agenda_router)
+
+
+@app.middleware("http")
+async def agenda_privacy_headers(request, call_next):
+    response = await call_next(request)
+    if request.url.path.startswith("/api/agenda"):
+        response.headers["Cache-Control"] = "no-store"
+        response.headers["Referrer-Policy"] = "no-referrer"
+    return response

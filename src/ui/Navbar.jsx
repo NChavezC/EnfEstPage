@@ -39,6 +39,7 @@ function Navbar() {
               Antes y Después
             </NavLink>
 
+            <NavLink to="/reservar" className={getLinkClasses}>Reservar</NavLink>
             <NavLink to="/contact" className={getLinkClasses}>
               Contacto
             </NavLink>

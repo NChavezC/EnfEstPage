@@ -12,7 +12,10 @@ class PaymentRequest(BaseModel):
     @field_validator("first_name", "last_name")
     @classmethod
     def clean_name(cls, value: str) -> str:
-        return value.strip()
+        value = value.strip()
+        if len(value) < 2:
+            raise ValueError("El nombre debe tener al menos dos caracteres")
+        return value
 
     @field_validator("email")
     @classmethod
