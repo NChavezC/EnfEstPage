@@ -59,3 +59,7 @@ TUU agrega sus parámetros con un signo de interrogación, incluso cuando la URL
 La migración `002_categories.sql` crea categorías y asigna los tratamientos existentes a Limpieza Facial. Ejecutar el inicializador contra la base de destino antes de desplegar esta versión. Es aditiva y conserva reservas y pagos. En Administración → Tratamientos y cuidados se crean o renombran categorías y se asignan tratamientos. Las categorías sin tratamientos activos no se muestran al público.
 
 El remitente de reservas se configura en `SMTP_SENDER=Enfermera Estética <reservas@enfermeraestetica.cl>`. Cambiar esta variable en Production y redesplegar para aplicarla. El dominio ya verificado en Resend permite usar este remitente; la recepción sigue en ImprovMX.
+
+## Eliminación del catálogo
+
+Aplicar `003_catalog_deletion.sql` antes de desplegar. El administrador puede eliminar tratamientos con confirmación: se retiran de las listas pública y administrativa mediante `deleted_at`, se desactivan y se desvinculan de la categoría. Se conserva el registro interno para las citas y sus pagos; la reprogramación y cancelación siguen utilizando la información guardada con la reserva. Una categoría se elimina físicamente solo cuando no tiene tratamientos asociados, incluidos inactivos. No se eliminan reservas ni se envían correos al retirar un tratamiento.

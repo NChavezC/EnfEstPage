@@ -527,3 +527,40 @@ def test_categories_migration_preserves_existing_bookings():
         after=c.execute("SELECT snapshot,status FROM agenda_bookings WHERE id=%s",(b["id"],)).fetchone()
         assert after==before
         assert c.execute("SELECT count(*) AS n FROM agenda_services WHERE category_id=1").fetchone()["n"]==3
+
+
+def test_delete_catalog_preserves_paid_booking_and_management():
+    body=request_body()
+    b=reserve(); p=payment(b["token"])
+    apply_event(event(p),simulated=True)
+    assert client.delete(f"/api/agenda/admin/services/{body['service_id']}").status_code==401
+    login()
+    services=client.get("/api/agenda/admin/services").json()
+    assert client.delete("/api/agenda/admin/categories/1").status_code==409
+    with connection() as c:
+        original=c.execute("SELECT snapshot FROM agenda_bookings WHERE id=%s",(b["id"],)).fetchone()["snapshot"]
+        c.execute("UPDATE agenda_services SET active=false WHERE id<>%s",(body["service_id"],))
+    assert client.delete("/api/agenda/admin/categories/1").status_code==409
+    for service in services:
+        assert client.delete(f"/api/agenda/admin/services/{service['id']}").status_code==200
+    assert client.get("/api/agenda/admin/services").json()==[]
+    assert client.get("/api/agenda/catalog").json()["services"]==[]
+    assert client.delete("/api/agenda/admin/categories/1").status_code==200
+    assert client.delete("/api/agenda/admin/categories/1").status_code==404
+    assert client.delete(f"/api/agenda/admin/services/{body['service_id']}").status_code==404
+    assert client.post("/api/agenda/bookings",json=body).status_code==404
+    old={k:v for k,v in services[0].items() if k not in {"id","version"}}
+    assert client.put(f"/api/agenda/admin/services/{services[0]['id']}",json=old).status_code==404
+    result=client.get("/api/agenda/bookings/"+b["token"]).json()
+    assert result["status"]=="confirmed" and result["payment"]["status"]=="completed"
+    slots=client.get("/api/agenda/admin/availability",params={"day":future_monday().isoformat(),"service_id":body["service_id"],"exclude":b["id"]})
+    assert slots.status_code==200 and slots.json()
+    moved=client.post(f"/api/agenda/admin/bookings/{b['id']}/move",json={"starts_at":slots.json()[-1]["starts_at"],"revision":1})
+    assert moved.status_code==200,moved.text
+    with connection() as c:
+        assert c.execute("SELECT snapshot FROM agenda_bookings WHERE id=%s",(b["id"],)).fetchone()["snapshot"]==original
+    assert run_once()  # Existing notifications can still be processed from the saved snapshot.
+    assert client.post(f"/api/agenda/admin/bookings/{b['id']}/cancel",json={"revision":2,"reason":"Prueba de conservación"}).status_code==200
+    initialize()
+    assert client.get("/api/agenda/admin/services").json()==[]
+    assert client.get("/api/agenda/admin/categories").json()==[]

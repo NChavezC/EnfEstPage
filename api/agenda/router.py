@@ -1,7 +1,7 @@
 from __future__ import annotations
 from typing import Optional
 import secrets
-from psycopg.errors import UniqueViolation
+from psycopg.errors import UniqueViolation, ForeignKeyViolation
 from datetime import date, datetime, timedelta
 from uuid import UUID, uuid4
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, Query
@@ -24,8 +24,8 @@ admin=APIRouter(prefix="/admin",dependencies=[Depends(require_admin)])
 def catalog():
     with connection() as conn:
         services=conn.execute("""SELECT id,category_id,name,price,deposit,duration,care,version FROM agenda_services
-          WHERE active ORDER BY id""").fetchall()
-        categories=conn.execute("SELECT id,name FROM agenda_categories WHERE id IN (SELECT category_id FROM agenda_services WHERE active) ORDER BY lower(name),id").fetchall()
+          WHERE active AND deleted_at IS NULL ORDER BY id""").fetchall()
+        categories=conn.execute("SELECT id,name FROM agenda_categories WHERE id IN (SELECT category_id FROM agenda_services WHERE active AND deleted_at IS NULL) ORDER BY lower(name),id").fetchall()
     return {"categories":categories,"services":services,"payment_mode":config.agenda_payment_mode,"timezone":"America/Santiago"}
 
 @router.get("/availability")
@@ -134,15 +134,44 @@ def check_category(conn,id):
     if not conn.execute("SELECT 1 FROM agenda_categories WHERE id=%s",(id,)).fetchone():
         raise HTTPException(422,"Selecciona una categoría existente")
 
+@admin.delete("/categories/{id}")
+def delete_category(id:int):
+    try:
+        with connection() as conn:
+            row=conn.execute("DELETE FROM agenda_categories WHERE id=%s RETURNING name",(id,)).fetchone()
+            if not row:
+                raise HTTPException(404,"Categoría no encontrada")
+            audit(conn,"category.deleted",id,row["name"])
+        return {"ok":True}
+    except ForeignKeyViolation:
+        raise HTTPException(409,"La categoría contiene tratamientos. Muévelos a otra categoría o elimínalos primero, incluidos los inactivos.")
+
+@admin.delete("/services/{id}")
+def delete_service(id:int):
+    with connection() as conn:
+        lock_agenda(conn)
+        row=conn.execute("""UPDATE agenda_services SET deleted_at=now(),active=false,category_id=NULL,
+          version=version+1 WHERE id=%s AND deleted_at IS NULL RETURNING name""",(id,)).fetchone()
+        if not row:
+            raise HTTPException(404,"Tratamiento no encontrado")
+        audit(conn,"service.deleted",id,row["name"])
+    return {"ok":True}
+
 @admin.get("/services")
 def services():
     with connection() as conn:
-        return conn.execute("SELECT * FROM agenda_services ORDER BY id").fetchall()
+        rows=conn.execute("SELECT * FROM agenda_services WHERE deleted_at IS NULL ORDER BY id").fetchall()
+        for row in rows:
+            row.pop("deleted_at",None)
+        return rows
 
 @admin.put("/services/{id}")
 def edit_service(id:int,body:ServiceChange):
     with connection() as conn:
+        lock_agenda(conn)
         service_by_id(conn,id,active=False)
+        if conn.execute("SELECT deleted_at FROM agenda_services WHERE id=%s",(id,)).fetchone()["deleted_at"]:
+            raise HTTPException(404,"Tratamiento eliminado")
         check_category(conn,body.category_id)
         data=body.model_dump()
         conn.execute("""UPDATE agenda_services SET category_id=%(category_id)s,name=%(name)s,price=%(price)s,deposit=%(deposit)s,

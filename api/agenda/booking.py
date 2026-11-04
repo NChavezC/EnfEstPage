@@ -11,6 +11,7 @@ def service_by_id(conn,id,active=True):
     service=conn.execute("SELECT * FROM agenda_services WHERE id=%s",(id,)).fetchone()
     if not service or (active and not service["active"]):
         raise HTTPException(404,"Tratamiento no disponible")
+    service.pop("deleted_at",None)
     return service
 
 def checked_start(value):
