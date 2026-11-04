@@ -22,15 +22,15 @@ admin=APIRouter(prefix="/admin",dependencies=[Depends(require_admin)])
 @router.get("/catalog")
 def catalog():
     with connection() as conn:
-        cfg=conn.execute("SELECT * FROM agenda_settings WHERE id=1").fetchone()
         services=conn.execute("""SELECT id,name,price,deposit,duration,care,version FROM agenda_services
           WHERE active ORDER BY id""").fetchall()
-    return {"services":services,"settings":cfg,"payment_mode":config.agenda_payment_mode,"timezone":"America/Santiago"}
+    return {"services":services,"payment_mode":config.agenda_payment_mode,"timezone":"America/Santiago"}
 
 @router.get("/availability")
 def availability(day:date,service_id:int):
     with connection() as conn:
-        return available(conn,day,service_by_id(conn,service_id))
+        slots=available(conn,day,service_by_id(conn,service_id))
+        return [{"starts_at":slot["starts_at"],"ends_at":slot["ends_at"]} for slot in slots]
 
 @router.post("/bookings",status_code=201,dependencies=[Depends(same_origin)])
 def book(body:BookingRequest,request:Request):

@@ -68,5 +68,5 @@ def public_booking(token):
             raise HTTPException(404,"Reserva no encontrada")
         payment=conn.execute("SELECT status,amount,reference FROM agenda_payments WHERE booking_id=%s",(b["id"],)).fetchone()
         return {"id":b["id"],"status":b["status"],"starts_at":b["starts_at"],"ends_at":b["ends_at"],
-          "expires_at":b["expires_at"],"treatment":b["snapshot"]["name"],"professional":b["snapshot"]["professional"],
+          "expires_at":b["expires_at"],"treatment":b["snapshot"]["name"],
           "price":b["snapshot"]["price"],"deposit":b["snapshot"]["deposit"],"care":b["snapshot"]["care"],"payment":payment}

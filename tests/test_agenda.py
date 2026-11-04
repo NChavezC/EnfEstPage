@@ -466,3 +466,18 @@ def test_checkout_uses_short_reference_and_preserves_existing_attempt(monkeypatc
         assert url.path.endswith("/reservar/resultado/"+b["token"])
     with connection() as c:
         assert c.execute("SELECT reference FROM agenda_payments").fetchone()["reference"]==sent[0]["x_reference"]
+
+
+def test_public_endpoints_hide_internal_settings_but_admin_retains_them():
+    catalog=client.get("/api/agenda/catalog").json()
+    assert "settings" not in catalog
+    assert "professional" not in str(catalog) and "notice_hours" not in str(catalog)
+    s,_=slot()
+    slots=client.get("/api/agenda/availability",params={"day":str(future_monday()),"service_id":s["id"]}).json()
+    assert slots and set(slots[0])=={"starts_at","ends_at"}
+    b=reserve()
+    public=client.get("/api/agenda/bookings/"+b["token"]).json()
+    assert "professional" not in public and "customer" not in public and "snapshot" not in public
+    login()
+    internal=client.get("/api/agenda/admin/settings").json()
+    assert internal["professional"] and internal["notice_hours"]==13
