@@ -24,7 +24,7 @@ No subir .env.local, .agenda-local, volcados de bases ni credenciales. Los previ
 - AGENDA_MAIL_MODE=resend
 - AGENDA_MAIL_DISPATCH=request
 - RESEND_API_KEY: clave de envío de Resend (la misma clave usada como SMTP_PASSWORD en desarrollo).
-- SMTP_SENDER=Enfermera Estética <contacto@enfermeraestetica.cl>
+- SMTP_SENDER=Enfermera Estética <reservas@enfermeraestetica.cl>
 - CRON_SECRET: secreto aleatorio del archivo importable.
 - TUU_ENV=production
 - TUU_ACCOUNT_ID / TUU_SECRET_KEY: credenciales de producción de TUU.
@@ -53,3 +53,9 @@ El 4 de noviembre de 2026 se aisló un rechazo de validación en integración: s
 
 ## Retorno del navegador
 TUU agrega sus parámetros con un signo de interrogación, incluso cuando la URL configurada ya contiene query string. Para nuevos pagos se usa /reservar/resultado/{token}, sin query previo. El frontend admite los enlaces anteriores con token seguido de ?x_ y extrae únicamente el token válido de 43 caracteres. Los parámetros x_result del navegador nunca confirman pagos: la confirmación procede del callback verificado y la base de datos. Durante creating se muestra Preparando tu pago, no un fallo. Pruebas: node --test tests/return-token.mjs y node tests/browser-return.mjs con Vite local activo.
+
+## Categorías de tratamientos
+
+La migración `002_categories.sql` crea categorías y asigna los tratamientos existentes a Limpieza Facial. Ejecutar el inicializador contra la base de destino antes de desplegar esta versión. Es aditiva y conserva reservas y pagos. En Administración → Tratamientos y cuidados se crean o renombran categorías y se asignan tratamientos. Las categorías sin tratamientos activos no se muestran al público.
+
+El remitente de reservas se configura en `SMTP_SENDER=Enfermera Estética <reservas@enfermeraestetica.cl>`. Cambiar esta variable en Production y redesplegar para aplicarla. El dominio ya verificado en Resend permite usar este remitente; la recepción sigue en ImprovMX.

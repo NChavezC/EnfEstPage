@@ -481,3 +481,49 @@ def test_public_endpoints_hide_internal_settings_but_admin_retains_them():
     login()
     internal=client.get("/api/agenda/admin/settings").json()
     assert internal["professional"] and internal["notice_hours"]==13
+
+
+def test_categories_migrate_and_admin_can_assign_services():
+    with connection() as c:
+        assert c.execute("SELECT name FROM agenda_categories WHERE id=1").fetchone()["name"]=="Limpieza Facial"
+        assert c.execute("SELECT count(*) AS n FROM agenda_services WHERE category_id=1").fetchone()["n"]==3
+    initialize()  # Re-running migrations must preserve categories and assignments.
+    assert client.post("/api/agenda/admin/categories",json={"name":"Corporal"}).status_code==401
+    login()
+    created=client.post("/api/agenda/admin/categories",json={"name":"Corporal"})
+    assert created.status_code==201,created.text
+    category_id=created.json()["id"]
+    assert client.post("/api/agenda/admin/categories",json={"name":" corporal "}).status_code==409
+    assert client.post("/api/agenda/admin/categories",json={"name":" "}).status_code==422
+    assert client.put(f"/api/agenda/admin/categories/{category_id}",json={"name":"Tratamientos Corporales"}).status_code==200
+    assert client.put(f"/api/agenda/admin/categories/{category_id}",json={"name":"Limpieza Facial"}).status_code==409
+    services=client.get("/api/agenda/admin/services").json()
+    body={k:v for k,v in services[0].items() if k not in {"id","version"}}
+    body["category_id"]=999999
+    assert client.post("/api/agenda/admin/services",json=body).status_code==422
+    body["category_id"]=category_id
+    body["name"]="Tratamiento corporal de prueba"
+    added=client.post("/api/agenda/admin/services",json=body)
+    assert added.status_code==201,added.text
+    assert client.put(f"/api/agenda/admin/services/{services[0]['id']}",json=body).status_code==200
+    catalog=client.get("/api/agenda/catalog").json()
+    assert any(c["name"]=="Tratamientos Corporales" for c in catalog["categories"])
+    assert any(s["id"]==added.json()["id"] and s["category_id"]==category_id for s in catalog["services"])
+    body["active"]=False
+    for service_id in [added.json()["id"],services[0]["id"]]:
+        assert client.put(f"/api/agenda/admin/services/{service_id}",json=body).status_code==200
+    assert all(c["id"]!=category_id for c in client.get("/api/agenda/catalog").json()["categories"])
+
+
+def test_categories_migration_preserves_existing_bookings():
+    b=reserve()
+    with connection() as c:
+        before=c.execute("SELECT snapshot,status FROM agenda_bookings WHERE id=%s",(b["id"],)).fetchone()
+        c.execute("ALTER TABLE agenda_services DROP COLUMN category_id")
+        c.execute("DROP TABLE agenda_categories")
+        c.execute("DELETE FROM agenda_migrations WHERE version='002_categories.sql'")
+    initialize()
+    with connection() as c:
+        after=c.execute("SELECT snapshot,status FROM agenda_bookings WHERE id=%s",(b["id"],)).fetchone()
+        assert after==before
+        assert c.execute("SELECT count(*) AS n FROM agenda_services WHERE category_id=1").fetchone()["n"]==3

@@ -23,7 +23,7 @@ try {
    return route.continue();
   });
   await page.goto('http://localhost:5173'+url,{waitUntil:'domcontentloaded'});
-  if(status==='confirmed')await page.getByText('Tu cita está confirmada. Guarda este enlace para consultarla.').waitFor();
+  if(status==='confirmed')await page.getByText('Tu cita está confirmada. Recibirás un correo de confirmación con los detalles de tu reserva.').waitFor();
   if(payment==='creating'){
    await page.getByText('Preparando tu pago con TUU…').waitFor();
    assert.equal(await page.getByText('No pudimos determinar',{exact:false}).count(),0);

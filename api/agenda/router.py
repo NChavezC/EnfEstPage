@@ -1,6 +1,7 @@
 from __future__ import annotations
 from typing import Optional
 import secrets
+from psycopg.errors import UniqueViolation
 from datetime import date, datetime, timedelta
 from uuid import UUID, uuid4
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, Query
@@ -11,7 +12,7 @@ from api.agenda.config import config
 from api.agenda.db import connection,lock_agenda,expire,audit
 from api.agenda.security import require_admin,same_origin,digest,rate_limit
 from api.agenda.setup import hash_password
-from api.agenda.schemas import (BookingRequest,ScheduleChange,ServiceChange,MoveRequest,CancelRequest,BlockRequest,LoginRequest,SettingsChange)
+from api.agenda.schemas import (CategoryChange,BookingRequest,ScheduleChange,ServiceChange,MoveRequest,CancelRequest,BlockRequest,LoginRequest,SettingsChange)
 from api.agenda.schedule import available, candidates, ZONE
 from api.agenda.booking import create_booking,public_booking,service_by_id,checked_start,queue_notifications
 from api.agenda.payments import checkout,apply_event
@@ -22,9 +23,10 @@ admin=APIRouter(prefix="/admin",dependencies=[Depends(require_admin)])
 @router.get("/catalog")
 def catalog():
     with connection() as conn:
-        services=conn.execute("""SELECT id,name,price,deposit,duration,care,version FROM agenda_services
+        services=conn.execute("""SELECT id,category_id,name,price,deposit,duration,care,version FROM agenda_services
           WHERE active ORDER BY id""").fetchall()
-    return {"services":services,"payment_mode":config.agenda_payment_mode,"timezone":"America/Santiago"}
+        categories=conn.execute("SELECT id,name FROM agenda_categories WHERE id IN (SELECT category_id FROM agenda_services WHERE active) ORDER BY lower(name),id").fetchall()
+    return {"categories":categories,"services":services,"payment_mode":config.agenda_payment_mode,"timezone":"America/Santiago"}
 
 @router.get("/availability")
 def availability(day:date,service_id:int):
@@ -101,6 +103,37 @@ def logout(request:Request,response:Response):
     response.delete_cookie("agenda_session",path="/api/agenda")
     return {"ok":True}
 
+@admin.get("/categories")
+def categories():
+    with connection() as conn:
+        return conn.execute("SELECT id,name FROM agenda_categories ORDER BY lower(name),id").fetchall()
+
+@admin.post("/categories",status_code=201)
+def add_category(body:CategoryChange):
+    try:
+        with connection() as conn:
+            row=conn.execute("INSERT INTO agenda_categories(name) VALUES(%s) RETURNING id,name",(body.name,)).fetchone()
+            audit(conn,"category.created",row["id"])
+        return row
+    except UniqueViolation:
+        raise HTTPException(409,"Ya existe una categoría con ese nombre")
+
+@admin.put("/categories/{id}")
+def edit_category(id:int,body:CategoryChange):
+    try:
+        with connection() as conn:
+            row=conn.execute("UPDATE agenda_categories SET name=%s WHERE id=%s RETURNING id,name",(body.name,id)).fetchone()
+            if not row:
+                raise HTTPException(404,"Categoría no encontrada")
+            audit(conn,"category.updated",id)
+        return row
+    except UniqueViolation:
+        raise HTTPException(409,"Ya existe una categoría con ese nombre")
+
+def check_category(conn,id):
+    if not conn.execute("SELECT 1 FROM agenda_categories WHERE id=%s",(id,)).fetchone():
+        raise HTTPException(422,"Selecciona una categoría existente")
+
 @admin.get("/services")
 def services():
     with connection() as conn:
@@ -110,8 +143,9 @@ def services():
 def edit_service(id:int,body:ServiceChange):
     with connection() as conn:
         service_by_id(conn,id,active=False)
+        check_category(conn,body.category_id)
         data=body.model_dump()
-        conn.execute("""UPDATE agenda_services SET name=%(name)s,price=%(price)s,deposit=%(deposit)s,
+        conn.execute("""UPDATE agenda_services SET category_id=%(category_id)s,name=%(name)s,price=%(price)s,deposit=%(deposit)s,
           duration=%(duration)s,care=%(care)s,confirmation=%(confirmation)s,reminder=%(reminder)s,
           reminder_hours=%(reminder_hours)s,active=%(active)s,version=version+1 WHERE id=%(id)s""",dict(data,id=id))
         audit(conn,"service.updated",id)
@@ -120,8 +154,9 @@ def edit_service(id:int,body:ServiceChange):
 @admin.post("/services",status_code=201)
 def add_service(body:ServiceChange):
     with connection() as conn:
-        row=conn.execute("""INSERT INTO agenda_services(name,price,deposit,duration,care,confirmation,reminder,reminder_hours,active)
-          VALUES(%(name)s,%(price)s,%(deposit)s,%(duration)s,%(care)s,%(confirmation)s,%(reminder)s,%(reminder_hours)s,%(active)s)
+        check_category(conn,body.category_id)
+        row=conn.execute("""INSERT INTO agenda_services(category_id,name,price,deposit,duration,care,confirmation,reminder,reminder_hours,active)
+          VALUES(%(category_id)s,%(name)s,%(price)s,%(deposit)s,%(duration)s,%(care)s,%(confirmation)s,%(reminder)s,%(reminder_hours)s,%(active)s)
           RETURNING id""",body.model_dump()).fetchone()
         audit(conn,"service.created",row["id"])
     return row

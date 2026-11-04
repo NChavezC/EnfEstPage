@@ -6,6 +6,7 @@ export default function Booking() {
   const navigate = useNavigate();
   const [catalog, setCatalog] = useState(null),
     [serviceId, setServiceId] = useState(""),
+    [categoryId, setCategoryId] = useState(""),
     [day, setDay] = useState(dateKey());
   const [slots, setSlots] = useState([]),
     [slot, setSlot] = useState(""),
@@ -22,7 +23,7 @@ export default function Booking() {
     [error, setError] = useState("");
   const service = catalog?.services.find(s => s.id === Number(serviceId));
   useEffect(() => {
-    api("/catalog").then(setCatalog).catch(e => setError(e.message));
+    api("/catalog").then(data => { setCatalog(data); setCategoryId(String(data.categories?.[0]?.id || "")); }).catch(e => setError(e.message));
   }, []);
   useEffect(() => {
     setSlot("");
@@ -78,7 +79,8 @@ export default function Booking() {
         setModal(true);
       }}>
       <h2 className="text-[21px] font-[650] mt-3.5 mb-3.5"><span className="inline-grid place-items-center w-[27px] h-[27px] rounded-full bg-[var(--color-highlight)] text-[var(--color-primary-dark)] text-[13px] mr-2">1</span> Elige tu tratamiento</h2>
-      <div className="grid gap-2.5 mb-[30px]">{catalog?.services.map(s => <button type="button" className={serviceId === String(s.id) ? "rounded-[10px] px-[17px] py-[11px] bg-[var(--color-highlight)] text-[var(--color-primary-dark)] font-semibold border border-[var(--color-primary)] cursor-pointer transition-colors hover:bg-[var(--color-surface-soft)] disabled:cursor-not-allowed disabled:opacity-50 text-left flex flex-col gap-[7px]" : "rounded-[10px] px-[17px] py-[11px] bg-[var(--color-surface)] text-[var(--color-body)] font-semibold border border-[var(--color-highlight)] cursor-pointer transition-colors hover:bg-[var(--color-background)] disabled:cursor-not-allowed disabled:opacity-50 text-left flex flex-col gap-[7px]"} key={s.id} onClick={() => setServiceId(String(s.id))} aria-pressed={serviceId === String(s.id)}>
+      <label className="flex flex-col gap-1.5 text-sm font-[550] mt-3 mb-5">Categoría<select aria-label="Categoría" value={categoryId} onChange={e => { setCategoryId(e.target.value); setServiceId(""); setSlot(""); setSlots([]); }} className="border border-[var(--color-highlight)] rounded-[9px] px-3 py-2.5 bg-[var(--color-surface)] min-w-0 w-full text-[var(--color-body)] font-normal">{catalog?.categories?.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select></label>
+      <div className="grid gap-2.5 mb-[30px]">{catalog?.services.filter(s => String(s.category_id) === categoryId).map(s => <button type="button" className={serviceId === String(s.id) ? "rounded-[10px] px-[17px] py-[11px] bg-[var(--color-highlight)] text-[var(--color-primary-dark)] font-semibold border border-[var(--color-primary)] cursor-pointer transition-colors hover:bg-[var(--color-surface-soft)] disabled:cursor-not-allowed disabled:opacity-50 text-left flex flex-col gap-[7px]" : "rounded-[10px] px-[17px] py-[11px] bg-[var(--color-surface)] text-[var(--color-body)] font-semibold border border-[var(--color-highlight)] cursor-pointer transition-colors hover:bg-[var(--color-background)] disabled:cursor-not-allowed disabled:opacity-50 text-left flex flex-col gap-[7px]"} key={s.id} onClick={() => setServiceId(String(s.id))} aria-pressed={serviceId === String(s.id)}>
         <strong>{s.name}</strong><span className="text-[13px] font-normal">{s.duration} min · {money(s.price)}</span>
       </button>)}</div>
       <h2 className="text-[21px] font-[650] mt-3.5 mb-3.5"><span className="inline-grid place-items-center w-[27px] h-[27px] rounded-full bg-[var(--color-highlight)] text-[var(--color-primary-dark)] text-[13px] mr-2">2</span> Encuentra tu horario</h2>

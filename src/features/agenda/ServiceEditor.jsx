@@ -13,11 +13,13 @@ const empty = {
 };
 export default function ServiceEditor() {
   const [services, setServices] = useState([]),
+    [categories, setCategories] = useState([]),
+    [category, setCategory] = useState({ name: "" }),
     [form, setForm] = useState(null),
     [error, setError] = useState(""),
     [message, setMessage] = useState(""),
     [busy, setBusy] = useState(false);
-  const load = () => api("/admin/services").then(setServices);
+  const load = () => Promise.all([api("/admin/services"), api("/admin/categories")]).then(([s, c]) => { setServices(s); setCategories(c); });
   useEffect(() => {
     load().catch(e => setError(e.message));
   }, []);
@@ -53,6 +55,15 @@ export default function ServiceEditor() {
       setBusy(false);
     }
   }
+  async function saveCategory(e) {
+    e.preventDefault(); setBusy(true); setError(""); setMessage("");
+    try {
+      await api("/admin/categories" + (category.id ? "/" + category.id : ""), {
+        method: category.id ? "PUT" : "POST", body: JSON.stringify({ name: category.name })
+      });
+      await load(); setCategory({ name: "" }); setMessage("Categoría guardada.");
+    } catch (e) { setError(e.message); } finally { setBusy(false); }
+  }
   const preview = text => text.replace(/\{(nombre|tratamiento|fecha|cuidados|saldo)\}/g, (_, k) => ({
     nombre: "Clienta de ejemplo",
     tratamiento: form.name,
@@ -60,8 +71,8 @@ export default function ServiceEditor() {
     cuidados: form.care,
     saldo: money(form.price - form.deposit)
   })[k]);
-  return <div className="grid grid-cols-2 gap-6 max-[760px]:grid-cols-1"><section className="bg-[var(--color-surface)] border border-[var(--color-highlight)] rounded-[20px] p-[26px] shadow-[0_6px_28px_#55323d06] max-[760px]:p-5"><h2 className="text-[21px] font-[650] mt-3.5 mb-3.5">Tratamientos</h2><div className="grid gap-2.5 mb-[30px]">{services.map(s => <button key={s.id} className="rounded-[10px] px-[17px] py-[11px] bg-[var(--color-surface)] text-[var(--color-body)] font-semibold border border-[var(--color-highlight)] cursor-pointer transition-colors hover:bg-[var(--color-background)] disabled:cursor-not-allowed disabled:opacity-50 text-left flex flex-col gap-[7px]" onClick={() => edit(s)}><strong>{s.name}{!s.active ? " · Inactivo" : ""}</strong><span className="text-[13px] font-normal">{money(s.price)} · Abono {money(s.deposit)} · {s.duration} min</span><span className="text-[13px] font-normal">Versión {s.version} · Recordatorios {s.reminder_hours ? s.reminder_hours + " h antes" : "apagados"}</span></button>)}</div><button onClick={() => edit(empty)} className="rounded-[10px] px-[17px] py-[11px] bg-[var(--color-primary)] text-white font-semibold border border-transparent cursor-pointer transition-colors hover:bg-[var(--color-primary-hover)] disabled:cursor-not-allowed disabled:opacity-50">Añadir tratamiento</button>{message && <p className="mt-[18px] mb-[18px] leading-[1.6] px-[18px] py-3.5 rounded-xl bg-green-50 text-green-800">{message}</p>}</section>
-    <section className="bg-[var(--color-surface)] border border-[var(--color-highlight)] rounded-[20px] p-[26px] shadow-[0_6px_28px_#55323d06] max-[760px]:p-5">{form ? <form onSubmit={save}><h2 className="text-[21px] font-[650] mt-3.5 mb-3.5">Editar tratamiento</h2><label className="flex flex-col gap-1.5 text-sm font-[550] mt-3 mb-3">Nombre<input required value={form.name} onChange={e => setForm({
+  return <div className="grid grid-cols-2 gap-6 max-[760px]:grid-cols-1"><section className="bg-[var(--color-surface)] border border-[var(--color-highlight)] rounded-[20px] p-[26px] shadow-[0_6px_28px_#55323d06] max-[760px]:p-5"><h2 className="text-[21px] font-[650] mt-3.5 mb-3.5">Categorías y tratamientos</h2><form onSubmit={saveCategory} className="mb-6"><label className="flex flex-col gap-1.5 text-sm font-[550] my-3">{category.id ? "Editar categoría" : "Nueva categoría"}<input required minLength={2} maxLength={100} value={category.name} onChange={e => setCategory({ ...category, name: e.target.value })} className="border border-[var(--color-highlight)] rounded-[9px] px-3 py-2.5 w-full bg-[var(--color-surface)]" /></label><div className="flex flex-wrap gap-2"><button disabled={busy} className="rounded-[10px] px-4 py-2 bg-[var(--color-primary)] text-white disabled:opacity-50">{category.id ? "Guardar categoría" : "Crear categoría"}</button>{category.id && <button type="button" onClick={() => setCategory({ name: "" })} className="px-4 py-2">Cancelar</button>}</div></form><div className="flex flex-wrap gap-2 mb-5">{categories.map(c => <button key={c.id} onClick={() => setCategory(c)} className="rounded-[10px] border border-[var(--color-highlight)] px-3 py-2 text-sm" aria-label={"Editar categoría " + c.name}>{c.name} · Editar</button>)}</div>{error && <p role="alert" className="p-3 my-3 rounded-xl bg-red-50 text-red-800">{error}</p>}<div className="grid gap-2.5 mb-[30px]">{services.map(s => <button key={s.id} className="rounded-[10px] px-[17px] py-[11px] bg-[var(--color-surface)] text-[var(--color-body)] font-semibold border border-[var(--color-highlight)] cursor-pointer transition-colors hover:bg-[var(--color-background)] disabled:cursor-not-allowed disabled:opacity-50 text-left flex flex-col gap-[7px]" onClick={() => edit(s)}><span className="text-[12px] text-[var(--color-muted)]">{categories.find(c => c.id === s.category_id)?.name}</span><strong>{s.name}{!s.active ? " · Inactivo" : ""}</strong><span className="text-[13px] font-normal">{money(s.price)} · Abono {money(s.deposit)} · {s.duration} min</span><span className="text-[13px] font-normal">Versión {s.version} · Recordatorios {s.reminder_hours ? s.reminder_hours + " h antes" : "apagados"}</span></button>)}</div><button disabled={!categories.length} onClick={() => edit({ ...empty, category_id: categories[0]?.id })} className="rounded-[10px] px-[17px] py-[11px] bg-[var(--color-primary)] text-white font-semibold border border-transparent cursor-pointer transition-colors hover:bg-[var(--color-primary-hover)] disabled:cursor-not-allowed disabled:opacity-50">Añadir tratamiento</button>{message && <p className="mt-[18px] mb-[18px] leading-[1.6] px-[18px] py-3.5 rounded-xl bg-green-50 text-green-800">{message}</p>}</section>
+    <section className="bg-[var(--color-surface)] border border-[var(--color-highlight)] rounded-[20px] p-[26px] shadow-[0_6px_28px_#55323d06] max-[760px]:p-5">{form ? <form onSubmit={save}><h2 className="text-[21px] font-[650] mt-3.5 mb-3.5">{form.id ? "Editar tratamiento" : "Nuevo tratamiento"}</h2><label className="flex flex-col gap-1.5 text-sm font-[550] my-3">Categoría<select aria-label="Categoría" required value={form.category_id} onChange={e => setForm({ ...form, category_id: Number(e.target.value) })} className="border border-[var(--color-highlight)] rounded-[9px] px-3 py-2.5 w-full bg-[var(--color-surface)]">{categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select></label><label className="flex flex-col gap-1.5 text-sm font-[550] mt-3 mb-3">Nombre<input required value={form.name} onChange={e => setForm({
             ...form,
             name: e.target.value
           })} className="border border-[var(--color-highlight)] rounded-[9px] px-3 py-2.5 bg-[var(--color-surface)] min-w-0 w-full text-[var(--color-body)] font-normal" /></label><div className="grid grid-cols-2 gap-x-[18px] max-[760px]:grid-cols-1">{[["price", "Precio total CLP"], ["deposit", "Abono CLP"], ["duration", "Duración (min)"]].map(([key, label]) => <label key={key} className="flex flex-col gap-1.5 text-sm font-[550] mt-3 mb-3">{label}<input type="number" required min="1" value={form[key]} onChange={e => setForm({
