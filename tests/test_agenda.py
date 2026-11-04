@@ -408,7 +408,7 @@ def test_checkout_merchant_redirect_preserves_redacted_reason_and_no_retry(monke
         async def post(self,url,**kwargs):
             payload=kwargs["json"]
             message="Invalid amount for "+payload["x_customer_email"]
-            target=payload["x_url_cancel"]+"&"+urlencode({"x_message":message})
+            target=payload["x_url_cancel"]+"?"+urlencode({"x_message":message})
             return httpx.Response(302,headers={"Location":target},request=httpx.Request("POST",url))
     b=reserve()
     monkeypatch.setattr(config,"agenda_payment_mode","tuu")
@@ -459,5 +459,10 @@ def test_checkout_uses_short_reference_and_preserves_existing_attempt(monkeypatc
         assert client.post(f"/api/agenda/bookings/{b['token']}/checkout").status_code==200
     assert len(sent)==1 and len(sent[0]["x_reference"])==26
     assert sent[0]["x_amount"]==10000
+    for field in ["x_url_cancel","x_url_complete"]:
+        from urllib.parse import urlparse
+        url=urlparse(sent[0][field])
+        assert not url.query
+        assert url.path.endswith("/reservar/resultado/"+b["token"])
     with connection() as c:
         assert c.execute("SELECT reference FROM agenda_payments").fetchone()["reference"]==sent[0]["x_reference"]

@@ -50,3 +50,6 @@ Desarrollo conserva SMTP y el worker local. No cambiar DATABASE_URL local por Ne
 
 ## Referencias de pago TUU
 El 4 de noviembre de 2026 se aisló un rechazo de validación en integración: solicitudes de $100 con referencia de 40 o 28 caracteres devolvieron HTTP 302 con Error validacion; con 26 caracteres TUU devolvió HTTP 200 y URL de checkout, incluyendo las URLs de retorno con query string de la agenda. Los nuevos intentos codifican los 128 bits del UUID en base 36, con prefijo R y longitud total 26. No se modifica ninguna referencia ya persistida. Estas pruebas crearon intentos únicamente en integración y no completaron pagos. La aceptación de checkout en producción se verifica por separado.
+
+## Retorno del navegador
+TUU agrega sus parámetros con un signo de interrogación, incluso cuando la URL configurada ya contiene query string. Para nuevos pagos se usa /reservar/resultado/{token}, sin query previo. El frontend admite los enlaces anteriores con token seguido de ?x_ y extrae únicamente el token válido de 43 caracteres. Los parámetros x_result del navegador nunca confirman pagos: la confirmación procede del callback verificado y la base de datos. Durante creating se muestra Preparando tu pago, no un fallo. Pruebas: node --test tests/return-token.mjs y node tests/browser-return.mjs con Vite local activo.

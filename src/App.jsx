@@ -25,6 +25,7 @@ function App() {
           <Route path="catalogo" element={<Catalog />} />
           <Route path="reservar" element={<Booking />} />
           <Route path="reservar/resultado" element={<BookingResult />} />
+          <Route path="reservar/resultado/:bookingToken" element={<BookingResult />} />
           <Route path="admin/*" element={<AgendaAdmin />} />
           <Route path="pago" element={<Payment />} />
           <Route path="pago/resultado" element={<PaymentResult />} />

@@ -39,6 +39,9 @@ def checkout_response_url(response,payload):
             sensitive=[settings.tuu_secret_key.get_secret_value(),payload.get("x_signature","")]
             sensitive += [str(v) for k,v in payload.items() if k.startswith("x_customer_") or k=="x_account_id"]
             sensitive += parse_qs(urlparse(payload["x_url_complete"]).query).get("token",[])
+            path_token=urlparse(payload["x_url_complete"]).path.rsplit("/",1)[-1]
+            if len(path_token)==43:
+                sensitive.append(path_token)
             for value in sorted(filter(None,sensitive),key=len,reverse=True):
                 message=message.replace(value,"[oculto]")
             raise CheckoutResponseError("TUU devolvió la solicitud al comercio: "+(message[:500] or "sin motivo informado"))
@@ -138,8 +141,8 @@ async def checkout(token):
         payload.update(x_reference=reference,x_amount=b["snapshot"]["deposit"],
           x_description="Reserva "+b["snapshot"]["name"],
           x_url_callback=config.agenda_public_url.rstrip("/")+"/api/agenda/tuu/callback",
-          x_url_cancel=config.agenda_public_url.rstrip("/")+"/reservar/resultado?token="+token,
-          x_url_complete=config.agenda_public_url.rstrip("/")+"/reservar/resultado?token="+token)
+          x_url_cancel=config.agenda_public_url.rstrip("/")+"/reservar/resultado/"+token,
+          x_url_complete=config.agenda_public_url.rstrip("/")+"/reservar/resultado/"+token)
         payload["x_signature"]=generate_signature(payload)
         try:
             async with httpx.AsyncClient(timeout=15,follow_redirects=False) as client:
