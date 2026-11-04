@@ -47,3 +47,6 @@ Desarrollo conserva SMTP y el worker local. No cambiar DATABASE_URL local por Ne
 - https://resend.com/docs/dashboard/emails/idempotency-keys
 - https://vercel.com/docs/cron-jobs/manage-cron-jobs
 - https://vercel.com/docs/functions/configuring-functions/region
+
+## Referencias de pago TUU
+El 4 de noviembre de 2026 se aisló un rechazo de validación en integración: solicitudes de $100 con referencia de 40 o 28 caracteres devolvieron HTTP 302 con Error validacion; con 26 caracteres TUU devolvió HTTP 200 y URL de checkout, incluyendo las URLs de retorno con query string de la agenda. Los nuevos intentos codifican los 128 bits del UUID en base 36, con prefijo R y longitud total 26. No se modifica ninguna referencia ya persistida. Estas pruebas crearon intentos únicamente en integración y no completaron pagos. La aceptación de checkout en producción se verifica por separado.

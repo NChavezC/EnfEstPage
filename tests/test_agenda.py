@@ -432,3 +432,32 @@ def test_checkout_redirect_rejects_untrusted_host():
     for url in ["https://evil.invalid/pay","https://haulmer.com.evil.invalid/pay","http://core.payment.haulmer.com/pay"]:
         response=httpx.Response(302,headers={"Location":url},request=httpx.Request("POST","https://core.payment.haulmer.com/api/v1/payment"))
         with pytest.raises(CheckoutResponseError): checkout_response_url(response,payload)
+
+
+def test_payment_reference_fits_provider_without_losing_uuid_bits():
+    from uuid import UUID
+    from api.agenda.payments import payment_reference
+    for number in [0,1,2**128-1,int("4d856fbfe9a34cc58189e0dfd30f2db5",16)]:
+        reference=payment_reference(UUID(int=number))
+        assert len(reference)==26 and reference.isalnum() and reference.startswith("R")
+        assert int(reference[1:],36)==number
+
+
+def test_checkout_uses_short_reference_and_preserves_existing_attempt(monkeypatch):
+    import httpx
+    sent=[]
+    class Provider:
+        async def __aenter__(self): return self
+        async def __aexit__(self,*args): pass
+        async def post(self,url,**kwargs):
+            sent.append(kwargs["json"])
+            return httpx.Response(200,text="https://core.payment.haulmer.com/checkout/test",request=httpx.Request("POST",url))
+    b=reserve()
+    monkeypatch.setattr(config,"agenda_payment_mode","tuu")
+    monkeypatch.setattr(httpx,"AsyncClient",lambda **kwargs:Provider())
+    for _ in range(2):
+        assert client.post(f"/api/agenda/bookings/{b['token']}/checkout").status_code==200
+    assert len(sent)==1 and len(sent[0]["x_reference"])==26
+    assert sent[0]["x_amount"]==10000
+    with connection() as c:
+        assert c.execute("SELECT reference FROM agenda_payments").fetchone()["reference"]==sent[0]["x_reference"]

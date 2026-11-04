@@ -99,6 +99,21 @@ def apply_event(payload,simulated=False):
         audit(conn,"payment.event",reference,result)
     return b["id"]
 
+def payment_reference(booking_id):
+    """Encode the full UUID in 25 base-36 digits plus R (26 characters).
+
+    TUU sandbox accepts 26-character references but rejects our former
+    40-character reference. Preserve all 128 bits, without truncation.
+    """
+    alphabet="0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+    value=booking_id.int
+    digits=""
+    while value:
+        value,remainder=divmod(value,36)
+        digits=alphabet[remainder]+digits
+    return "R"+digits.rjust(25,"0")
+
+
 async def checkout(token):
     with connection() as conn:
         lock_agenda(conn)
@@ -113,7 +128,7 @@ async def checkout(token):
             if previous["checkout_url"] and previous["status"] in {"ready","pending"}:
                 return {"checkout_url":previous["checkout_url"]}
             raise HTTPException(409,"Ya existe un intento. Consulta su estado antes de volver a pagar.")
-        reference="RESERVA-"+b["id"].hex.upper()
+        reference=payment_reference(b["id"])
         conn.execute("INSERT INTO agenda_payments(reference,booking_id,amount,status) VALUES(%s,%s,%s,'creating')",
           (reference,b["id"],b["snapshot"]["deposit"]))
     if config.agenda_payment_mode=="mock":
