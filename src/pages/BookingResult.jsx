@@ -18,7 +18,6 @@ export default function BookingResult() {
     const refresh = () => api("/bookings/" + encodeURIComponent(token)).then(b => {
       if (active) {
         setBooking(b);
-        setError("");
       }
     }).catch(e => {
       if (active) setError(e.message);

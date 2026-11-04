@@ -379,3 +379,56 @@ def test_resend_transport_uses_snapshot_and_stable_key(monkeypatch):
     assert "CUIDADOS PREVIOS" in args["json"]["text"]
     with connection() as c:
         assert c.execute("SELECT status FROM agenda_jobs").fetchone()["status"]=="accepted"
+
+
+def test_checkout_redirect_to_provider_is_reused_without_second_post(monkeypatch):
+    import httpx
+    calls=[]
+    class Redirect:
+        async def __aenter__(self): return self
+        async def __aexit__(self,*args): pass
+        async def post(self,url,**kwargs):
+            calls.append(kwargs["json"])
+            return httpx.Response(302,headers={"Location":"https://core.payment.haulmer.com/checkout/test"},request=httpx.Request("POST",url))
+    b=reserve()
+    monkeypatch.setattr(config,"agenda_payment_mode","tuu")
+    monkeypatch.setattr(httpx,"AsyncClient",lambda **kwargs:Redirect())
+    for _ in range(2):
+        result=client.post(f"/api/agenda/bookings/{b['token']}/checkout")
+        assert result.status_code==200
+        assert result.json()["checkout_url"]=="https://core.payment.haulmer.com/checkout/test"
+    assert len(calls)==1
+
+
+def test_checkout_merchant_redirect_preserves_redacted_reason_and_no_retry(monkeypatch):
+    import httpx
+    class Rejected:
+        async def __aenter__(self): return self
+        async def __aexit__(self,*args): pass
+        async def post(self,url,**kwargs):
+            payload=kwargs["json"]
+            message="Invalid amount for "+payload["x_customer_email"]
+            target=payload["x_url_cancel"]+"&"+urlencode({"x_message":message})
+            return httpx.Response(302,headers={"Location":target},request=httpx.Request("POST",url))
+    b=reserve()
+    monkeypatch.setattr(config,"agenda_payment_mode","tuu")
+    monkeypatch.setattr(httpx,"AsyncClient",lambda **kwargs:Rejected())
+    result=client.post(f"/api/agenda/bookings/{b['token']}/checkout")
+    assert result.status_code==502
+    assert "Invalid amount" in result.json()["detail"]
+    assert "prueba@example.invalid" not in result.text
+    assert b["token"] not in result.text
+    with connection() as c:
+        detail=c.execute("SELECT details FROM agenda_audit WHERE action='payment.checkout_error'").fetchone()["details"]
+        assert "Invalid amount" in detail and "prueba@example.invalid" not in detail
+    assert client.post(f"/api/agenda/bookings/{b['token']}/checkout").status_code==409
+
+
+def test_checkout_redirect_rejects_untrusted_host():
+    import httpx
+    from api.agenda.payments import checkout_response_url,CheckoutResponseError
+    payload={"x_url_cancel":"https://enfermeraestetica.cl/reservar/resultado?token=test",
+             "x_url_complete":"https://enfermeraestetica.cl/reservar/resultado?token=test"}
+    for url in ["https://evil.invalid/pay","https://haulmer.com.evil.invalid/pay","http://core.payment.haulmer.com/pay"]:
+        response=httpx.Response(302,headers={"Location":url},request=httpx.Request("POST","https://core.payment.haulmer.com/api/v1/payment"))
+        with pytest.raises(CheckoutResponseError): checkout_response_url(response,payload)

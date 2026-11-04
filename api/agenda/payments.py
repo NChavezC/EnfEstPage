@@ -1,7 +1,8 @@
 import hashlib
 import json
+import logging
 from decimal import Decimal, InvalidOperation
-from urllib.parse import urlparse
+from urllib.parse import urlparse,parse_qs,urljoin
 import httpx
 from fastapi import HTTPException
 from api.agenda.config import config
@@ -12,6 +13,48 @@ from api.config import settings
 from api.payment import build_payment_payload
 from api.schemas import PaymentRequest
 from api.tuu import generate_signature,verify_signature
+
+
+logger=logging.getLogger(__name__)
+
+class CheckoutResponseError(ValueError):
+    pass
+
+
+def checkout_response_url(response,payload):
+    """Read redirects without following them or replaying the payment POST."""
+    if response.is_redirect:
+        location=response.headers.get("location","").strip()
+        if not location:
+            raise CheckoutResponseError("TUU devolvió una redirección sin destino")
+        url=urljoin(str(response.request.url),location)
+        parsed=urlparse(url)
+        query=parse_qs(parsed.query,keep_blank_values=True)
+        # TUU returns validation failures to the configured merchant return URL.
+        returns=[urlparse(payload[key]) for key in ("x_url_cancel","x_url_complete")]
+        merchant_return=any((parsed.scheme,parsed.netloc,parsed.path)==(r.scheme,r.netloc,r.path) for r in returns)
+        if merchant_return:
+            message=" ".join(query.get("x_message",[""])[0].split())
+            # Never persist secrets, booking access tokens, or personal fields if echoed.
+            sensitive=[settings.tuu_secret_key.get_secret_value(),payload.get("x_signature","")]
+            sensitive += [str(v) for k,v in payload.items() if k.startswith("x_customer_") or k=="x_account_id"]
+            sensitive += parse_qs(urlparse(payload["x_url_complete"]).query).get("token",[])
+            for value in sorted(filter(None,sensitive),key=len,reverse=True):
+                message=message.replace(value,"[oculto]")
+            raise CheckoutResponseError("TUU devolvió la solicitud al comercio: "+(message[:500] or "sin motivo informado"))
+        host=parsed.hostname or ""
+        roots=["haulmer.com","tuu.cl"]
+        if settings.tuu_env=="integration":
+            roots.append("haulmer.dev")
+        if parsed.scheme!="https" or parsed.username or parsed.password or not any(host==root or host.endswith("."+root) for root in roots):
+            raise CheckoutResponseError("TUU devolvió una redirección a un destino no reconocido")
+        return url
+    response.raise_for_status()
+    url=response.text.strip()
+    parsed=urlparse(url)
+    if parsed.scheme!="https" or not parsed.hostname or parsed.username or parsed.password:
+        raise CheckoutResponseError("TUU respondió sin una URL de pago válida")
+    return url
 
 def apply_event(payload,simulated=False):
     if not simulated:
@@ -86,15 +129,16 @@ async def checkout(token):
         try:
             async with httpx.AsyncClient(timeout=15,follow_redirects=False) as client:
                 response=await client.post(settings.tuu_payment_url,json=payload,headers={"X-REDIRECT":"false"})
-            response.raise_for_status()
-            url=response.text.strip()
-            parsed=urlparse(url)
-            if parsed.scheme!="https" or not parsed.hostname:
-                raise ValueError("URL de pago inválida")
-        except (httpx.HTTPError,ValueError):
+            url=checkout_response_url(response,payload)
+        except (httpx.HTTPError,ValueError) as error:
+            detail=str(error) if isinstance(error,CheckoutResponseError) else (
+                f"TUU respondió HTTP {error.response.status_code}" if isinstance(error,httpx.HTTPStatusError)
+                else "Error de conexión con TUU ("+type(error).__name__+")")
+            logger.warning("Checkout TUU reference=%s detail=%s",reference,detail)
             with connection() as conn:
                 conn.execute("UPDATE agenda_payments SET status='unknown' WHERE reference=%s AND status='creating'",(reference,))
-            raise HTTPException(502,"No pudimos determinar si TUU creó el pago. Consulta la reserva; no inicies otro cobro.")
+                audit(conn,"payment.checkout_error",reference,detail)
+            raise HTTPException(502,detail+". No inicies otro cobro; contacta al centro.")
     with connection() as conn:
         conn.execute("""UPDATE agenda_payments SET checkout_url=%s,
           status=CASE WHEN status='creating' THEN 'ready' ELSE status END WHERE reference=%s""",(url,reference))
