@@ -2,8 +2,8 @@ import { useEffect, useState } from "react";
 import Modal from "./Modal";
 import { api, money } from "./api";
 const empty = {
-  name: "Nuevo tratamiento",
-  price: 28000,
+  name: "",
+  price: 0,
   deposit: 10000,
   duration: 120,
   care: "CUIDADOS PREVIOS",
@@ -15,7 +15,9 @@ const empty = {
 export default function ServiceEditor() {
   const [services, setServices] = useState([]),
     [categories, setCategories] = useState([]),
-    [category, setCategory] = useState({ name: "" }),
+    [category, setCategory] = useState(null),
+    [filter, setFilter] = useState(""),
+    [title, setTitle] = useState(""),
     [form, setForm] = useState(null),
     [deletion, setDeletion] = useState(null),
     [error, setError] = useState(""),
@@ -25,7 +27,8 @@ export default function ServiceEditor() {
   useEffect(() => {
     load().catch(e => setError(e.message));
   }, []);
-  function edit(s) {
+  function edit(s, heading) {
+    setTitle(heading);
     setForm({
       ...s
     });
@@ -63,7 +66,7 @@ export default function ServiceEditor() {
       await api("/admin/categories" + (category.id ? "/" + category.id : ""), {
         method: category.id ? "PUT" : "POST", body: JSON.stringify({ name: category.name })
       });
-      await load(); setCategory({ name: "" }); setMessage("Categoría guardada.");
+      await load(); setCategory(null); setMessage("Categoría guardada.");
     } catch (e) { setError(e.message); } finally { setBusy(false); }
   }
   async function remove() {
@@ -71,7 +74,7 @@ export default function ServiceEditor() {
     try {
       await api("/admin/" + deletion.kind + "/" + deletion.id, { method: "DELETE" });
       if (deletion.kind === "services") setForm(null);
-      else setCategory({ name: "" });
+      else { setCategory(null); setFilter(""); }
       setDeletion(null); await load(); setMessage("Eliminado correctamente. El historial de reservas se conserva.");
     } catch (e) { setError(e.message); } finally { setBusy(false); }
   }
@@ -82,8 +85,67 @@ export default function ServiceEditor() {
     cuidados: form.care,
     saldo: money(form.price - form.deposit)
   })[k]);
-  return <div className="grid grid-cols-2 gap-6 max-[760px]:grid-cols-1"><section className="bg-[var(--color-surface)] border border-[var(--color-highlight)] rounded-[20px] p-[26px] shadow-[0_6px_28px_#55323d06] max-[760px]:p-5"><h2 className="text-[21px] font-[650] mt-3.5 mb-3.5">Categorías y tratamientos</h2><form onSubmit={saveCategory} className="mb-6"><label className="flex flex-col gap-1.5 text-sm font-[550] my-3">{category.id ? "Editar categoría" : "Nueva categoría"}<input required minLength={2} maxLength={100} value={category.name} onChange={e => setCategory({ ...category, name: e.target.value })} className="border border-[var(--color-highlight)] rounded-[9px] px-3 py-2.5 w-full bg-[var(--color-surface)]" /></label><div className="flex flex-wrap gap-2"><button disabled={busy} className="rounded-[10px] px-4 py-2 bg-[var(--color-primary)] text-white disabled:opacity-50">{category.id ? "Guardar categoría" : "Crear categoría"}</button>{category.id && <button type="button" onClick={() => setCategory({ name: "" })} className="px-4 py-2">Cancelar</button>}{category.id && <button type="button" disabled={busy} onClick={() => { setError(""); setDeletion({ kind: "categories", id: category.id, name: category.name }); }} className="px-4 py-2 rounded-[10px] border border-red-200 text-red-700 disabled:opacity-50">Eliminar categoría</button>}</div></form><div className="flex flex-wrap gap-2 mb-5">{categories.map(c => <button key={c.id} onClick={() => setCategory(c)} className="rounded-[10px] border border-[var(--color-highlight)] px-3 py-2 text-sm" aria-label={"Editar categoría " + c.name}>{c.name} · Editar</button>)}</div>{error && <p role="alert" className="p-3 my-3 rounded-xl bg-red-50 text-red-800">{error}</p>}<div className="grid gap-2.5 mb-[30px]">{services.map(s => <button key={s.id} className="rounded-[10px] px-[17px] py-[11px] bg-[var(--color-surface)] text-[var(--color-body)] font-semibold border border-[var(--color-highlight)] cursor-pointer transition-colors hover:bg-[var(--color-background)] disabled:cursor-not-allowed disabled:opacity-50 text-left flex flex-col gap-[7px]" onClick={() => edit(s)}><span className="text-[12px] text-[var(--color-muted)]">{categories.find(c => c.id === s.category_id)?.name}</span><strong>{s.name}{!s.active ? " · Inactivo" : ""}</strong><span className="text-[13px] font-normal">{money(s.price)} · Abono {money(s.deposit)} · {s.duration} min</span><span className="text-[13px] font-normal">Versión {s.version} · Recordatorios {s.reminder_hours ? s.reminder_hours + " h antes" : "apagados"}</span></button>)}</div><button disabled={!categories.length} onClick={() => edit({ ...empty, category_id: categories[0]?.id })} className="rounded-[10px] px-[17px] py-[11px] bg-[var(--color-primary)] text-white font-semibold border border-transparent cursor-pointer transition-colors hover:bg-[var(--color-primary-hover)] disabled:cursor-not-allowed disabled:opacity-50">Añadir tratamiento</button>{message && <p className="mt-[18px] mb-[18px] leading-[1.6] px-[18px] py-3.5 rounded-xl bg-green-50 text-green-800">{message}</p>}</section>
-    <section className="bg-[var(--color-surface)] border border-[var(--color-highlight)] rounded-[20px] p-[26px] shadow-[0_6px_28px_#55323d06] max-[760px]:p-5">{form ? <form onSubmit={save}><h2 className="text-[21px] font-[650] mt-3.5 mb-3.5">{form.id ? "Editar tratamiento" : "Nuevo tratamiento"}</h2><label className="flex flex-col gap-1.5 text-sm font-[550] my-3">Categoría<select aria-label="Categoría" required value={form.category_id} onChange={e => setForm({ ...form, category_id: Number(e.target.value) })} className="border border-[var(--color-highlight)] rounded-[9px] px-3 py-2.5 w-full bg-[var(--color-surface)]">{categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select></label><label className="flex flex-col gap-1.5 text-sm font-[550] mt-3 mb-3">Nombre<input required value={form.name} onChange={e => setForm({
+  const selected = categories.find(c => String(c.id) === filter);
+  const visible = selected ? services.filter(s => s.category_id === selected.id) : services;
+  const button = "rounded-[10px] border border-[var(--color-highlight)] px-4 py-2 disabled:opacity-50";
+  const primary = button + " bg-[var(--color-primary)] text-white";
+  const field = "rounded-[9px] border border-[var(--color-highlight)] bg-[var(--color-surface)] px-3 py-2";
+  function startCategory(value) {
+    setError(""); setMessage(""); setCategory(value);
+  }
+  function confirmDelete(kind, item) {
+    setError(""); setMessage(""); setDeletion({ kind, id: item.id, name: item.name });
+  }
+  function cancelDelete() {
+    if (!busy) { setError(""); setDeletion(null); }
+  }
+  return <section className="rounded-[20px] border border-[var(--color-highlight)] bg-[var(--color-surface)] p-5">
+    <h2 className="mb-4 text-xl font-semibold">Categorías y tratamientos</h2>
+    <div className="flex flex-wrap items-end gap-3">
+      <label className="grid gap-1">Filtrar por categoría
+        <select className={field} value={filter} onChange={e => setFilter(e.target.value)}>
+          <option value="">Todos</option>
+          {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+        </select>
+      </label>
+      <button className={button} onClick={() => startCategory({ name: "" })}>Crear categoría</button>
+      <button className={primary} disabled={!categories.length}
+        onClick={() => edit({ ...empty, category_id: (selected || categories[0]).id }, "Crear tratamiento")}>Crear tratamiento</button>
+    </div>
+    {selected && <div className="my-3 flex flex-wrap gap-2">
+      <button className={button} onClick={() => startCategory(selected)}>Editar categoría</button>
+      <button className={button} onClick={() => confirmDelete("categories", selected)}>Eliminar categoría</button>
+    </div>}
+    {message && <p role="status" className="my-3 text-green-800">{message}</p>}
+    {error && !category && !form && !deletion && <p role="alert">{error}</p>}
+    <ul className="mt-5 grid gap-3">
+      {visible.map(s => <li key={s.id} className="rounded-xl border border-[var(--color-highlight)] p-4">
+        <p className="text-sm">{categories.find(c => c.id === s.category_id)?.name}</p>
+        <strong>{s.name}{!s.active && " · Inactivo"}</strong>
+        <p>{money(s.price)} · Abono {money(s.deposit)} · {s.duration} min</p>
+        <p className="text-sm">Versión {s.version} · Recordatorios {s.reminder_hours ? s.reminder_hours + " h antes" : "apagados"}</p>
+        <div className="mt-3 flex flex-wrap gap-2">
+          <button className={button} onClick={() => edit(s, "Editar tratamiento")}>Editar</button>
+          <button className={button} onClick={() => {
+            const name = "Copia de " + s.name;
+            edit({ ...s, id: undefined, name }, name);
+          }}>Copiar</button>
+          <button className={button} onClick={() => confirmDelete("services", s)}>Eliminar</button>
+        </div>
+      </li>)}
+    </ul>
+    {!visible.length && <p className="my-4">No hay tratamientos en esta selección.</p>}
+    {category && <Modal title={category.id ? "Editar categoría" : "Crear categoría"} onClose={() => !busy && setCategory(null)}>
+      <form onSubmit={saveCategory}>
+        <label className="my-4 grid gap-2">Nombre de la categoría
+          <input className={field} required minLength={2} maxLength={100} value={category.name}
+            onChange={e => setCategory({ ...category, name: e.target.value })} />
+        </label>
+        {error && <p role="alert">{error}</p>}
+        <button className={primary} disabled={busy}>Guardar categoría</button>
+      </form>
+    </Modal>}
+    {form && <Modal title={title} onClose={() => !busy && setForm(null)}><form onSubmit={save}><label className="flex flex-col gap-1.5 text-sm font-[550] my-3">Categoría<select aria-label="Categoría" required value={form.category_id} onChange={e => setForm({ ...form, category_id: Number(e.target.value) })} className="border border-[var(--color-highlight)] rounded-[9px] px-3 py-2.5 w-full bg-[var(--color-surface)]">{categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select></label><label className="flex flex-col gap-1.5 text-sm font-[550] mt-3 mb-3">Nombre<input required value={form.name} onChange={e => setForm({
             ...form,
             name: e.target.value
           })} className="border border-[var(--color-highlight)] rounded-[9px] px-3 py-2.5 bg-[var(--color-surface)] min-w-0 w-full text-[var(--color-body)] font-normal" /></label><div className="grid grid-cols-2 gap-x-[18px] max-[760px]:grid-cols-1">{[["price", "Precio total CLP"], ["deposit", "Abono CLP"], ["duration", "Duración (min)"]].map(([key, label]) => <label key={key} className="flex flex-col gap-1.5 text-sm font-[550] mt-3 mb-3">{label}<input type="number" required min="1" value={form[key]} onChange={e => setForm({
@@ -98,7 +160,7 @@ export default function ServiceEditor() {
             ...form,
             confirmation: e.target.value
           })} className="border border-[var(--color-highlight)] rounded-[9px] px-3 py-2.5 bg-[var(--color-surface)] min-w-0 w-full text-[var(--color-body)] font-normal min-h-[110px]" /></label>
-      <p className="mt-2.5 mb-2.5 leading-[1.65] text-[var(--color-muted)] text-[13px]">Variables: {"{nombre}, {tratamiento}, {fecha}, {cuidados}, {saldo}"}</p><div className="whitespace-pre-wrap p-4 border border-dashed border-[var(--color-border)] rounded-[10px] text-sm">{preview(form.confirmation)}</div>
+      <p className="mt-2.5 mb-2.5 leading-[1.65] text-[var(--color-muted)] text-[13px]">Variables: {"{nombre}, {tratamiento}, {fecha}, {cuidados}, {saldo}"}</p><label className="grid gap-2 text-sm">Vista previa del correo de confirmación<textarea readOnly className="h-32 w-full resize-none overflow-y-auto p-3 border rounded-[10px]" value={preview(form.confirmation)} /></label>
       <label className="flex flex-row gap-2.5 text-sm font-[550] mt-3 mb-3 items-center"><input type="checkbox" checked={form.reminder_hours !== null} onChange={e => setForm({
             ...form,
             reminder_hours: e.target.checked ? 24 : null
@@ -115,8 +177,8 @@ export default function ServiceEditor() {
             ...form,
             active: e.target.checked
           })} className="border border-[var(--color-highlight)] rounded-[9px] px-3 py-2.5 bg-[var(--color-surface)] min-w-0 w-[18px] text-[var(--color-body)] font-normal h-[18px] accent-[var(--color-primary)]" />Tratamiento disponible para nuevas reservas</label>
-      {error && <p className="mt-[18px] mb-[18px] leading-[1.6] px-[18px] py-3.5 rounded-xl bg-red-50 text-red-800" role="alert">{error}</p>}<button disabled={busy} className="rounded-[10px] px-[17px] py-[11px] bg-[var(--color-primary)] text-white font-semibold border border-transparent cursor-pointer transition-colors hover:bg-[var(--color-primary-hover)] disabled:cursor-not-allowed disabled:opacity-50">{busy ? "Guardando…" : "Guardar tratamiento"}</button>{form.id && <button type="button" disabled={busy} onClick={() => { setError(""); setDeletion({ kind: "services", id: form.id, name: form.name }); }} className="mt-3 ml-2 px-4 py-2 rounded-[10px] border border-red-200 text-red-700 disabled:opacity-50">Eliminar tratamiento</button>}
-    </form> : <p className="mt-[18px] mb-[18px] leading-[1.6] px-[18px] py-3.5 rounded-xl bg-[var(--color-background)] text-[var(--color-muted)]">Selecciona un tratamiento para editar sus precios, cuidados y correos.</p>}</section>
-    {deletion && <Modal title={deletion.kind === "services" ? "Eliminar tratamiento" : "Eliminar categoría"} onClose={() => { if (!busy) setDeletion(null); }}><p className="my-3">¿Eliminar «{deletion.name}»?</p><p className="my-3">{deletion.kind === "services" ? "Dejará de aparecer en el catálogo y en la lista de tratamientos. Las citas existentes, sus pagos y correos se conservarán y podrán seguir gestionándose." : "Solo se puede eliminar una categoría vacía. Primero mueve o elimina sus tratamientos, incluidos los inactivos."}</p>{error && <p role="alert" className="p-3 my-3 rounded-xl bg-red-50 text-red-800">{error}</p>}<div className="flex gap-3 flex-wrap mt-5"><button type="button" disabled={busy} onClick={() => setDeletion(null)} className="px-4 py-2 border rounded-[10px]">Cancelar</button><button type="button" disabled={busy} onClick={remove} className="px-4 py-2 rounded-[10px] bg-red-700 text-white disabled:opacity-50">{busy ? "Eliminando…" : "Confirmar eliminación"}</button></div></Modal>}
-  </div>;
+      {error && <p className="mt-[18px] mb-[18px] leading-[1.6] px-[18px] py-3.5 rounded-xl bg-red-50 text-red-800" role="alert">{error}</p>}<button disabled={busy} className="rounded-[10px] px-[17px] py-[11px] bg-[var(--color-primary)] text-white font-semibold border border-transparent cursor-pointer transition-colors hover:bg-[var(--color-primary-hover)] disabled:cursor-not-allowed disabled:opacity-50">{busy ? "Guardando…" : "Guardar tratamiento"}</button>
+    </form></Modal>}
+    {deletion && <Modal title={deletion.kind === "services" ? "Eliminar tratamiento" : "Eliminar categoría"} onClose={cancelDelete}><p className="my-3">¿Eliminar «{deletion.name}»?</p><p className="my-3">{deletion.kind === "services" ? "Dejará de aparecer en el catálogo y en la lista de tratamientos. Las citas existentes, sus pagos y correos se conservarán y podrán seguir gestionándose." : "Solo se puede eliminar una categoría vacía. Primero mueve o elimina sus tratamientos, incluidos los inactivos."}</p>{error && <p role="alert" className="p-3 my-3 rounded-xl bg-red-50 text-red-800">{error}</p>}<div className="flex gap-3 flex-wrap mt-5"><button type="button" disabled={busy} onClick={cancelDelete} className="px-4 py-2 border rounded-[10px]">Cancelar</button><button type="button" disabled={busy} onClick={remove} className="px-4 py-2 rounded-[10px] bg-red-700 text-white disabled:opacity-50">{busy ? "Eliminando…" : "Confirmar eliminación"}</button></div></Modal>}
+  </section>;
 }
