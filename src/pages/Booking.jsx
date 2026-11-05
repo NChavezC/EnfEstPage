@@ -23,7 +23,13 @@ export default function Booking() {
     [error, setError] = useState("");
   const service = catalog?.services.find(s => s.id === Number(serviceId));
   useEffect(() => {
-    api("/catalog").then(data => { setCatalog(data); setCategoryId(String(data.categories?.[0]?.id || "")); }).catch(e => setError(e.message));
+    api("/catalog").then(data => {
+      const categories = data.categories || [];
+      const findByName = name => categories.find(c => c.name.trim().toLowerCase() === name);
+      const cleaning = findByName("limpiezas") || findByName("limpieza facial") || findByName("limpiezas faciales");
+      setCatalog({ ...data, categories: categories.map(c => c === cleaning ? { ...c, name: "Limpiezas" } : c) });
+      setCategoryId(String((cleaning || categories[0])?.id ?? ""));
+    }).catch(e => setError(e.message));
   }, []);
   useEffect(() => {
     setSlot("");

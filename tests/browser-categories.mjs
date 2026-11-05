@@ -1,7 +1,7 @@
 import {chromium} from '../.agenda-local/ui/node_modules/playwright/index.mjs';
 import assert from 'node:assert/strict';
 const browser=await chromium.launch({executablePath:'C:/Program Files/Google/Chrome/Application/chrome.exe',headless:true});
-const categories=[{id:1,name:'Limpieza Facial'},{id:2,name:'Corporal'}];
+const categories=[{id:2,name:'Corporal'},{id:1,name:'Limpieza Facial'}];
 const services=[{id:1,category_id:1,name:'Limpieza de prueba',duration:120,price:28000,deposit:10000,care:'CUIDADOS',confirmation:'Hola {nombre}',reminder:'Hola {nombre}',reminder_hours:null,active:true,version:1},{id:2,category_id:2,name:'Corporal de prueba',active:true,duration:30,price:20000,deposit:10000,version:1}];
 try {
  for(const width of [390,1280]) {
@@ -27,6 +27,7 @@ try {
   });
   await page.goto('http://localhost:5173/reservar');
   await page.getByRole('button',{name:/Limpieza de prueba/}).waitFor();
+  assert.equal(await page.getByLabel('Categoría',{exact:true}).locator('option:checked').innerText(),'Limpiezas');
   assert.equal(await page.getByRole('button',{name:/Corporal de prueba/}).count(),0);
   await page.getByRole('button',{name:/Limpieza de prueba/}).click();
   await page.getByLabel('Categoría',{exact:true}).selectOption('2');

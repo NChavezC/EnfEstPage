@@ -9,6 +9,7 @@ import ssl
 import certifi
 import time
 from email.message import EmailMessage
+from html import escape
 from api.agenda.config import config,ROOT
 from api.agenda.db import connection,lock_agenda,expire
 from api.agenda.schedule import ZONE
@@ -30,7 +31,16 @@ def deliver(job,b):
     message["From"]=config.smtp_sender or "desarrollo@enfermeraestetica.local"
     message["To"]=b["customer"]["email"]
     message["Message-ID"]=f"<agenda-{job['id']}@enfermeraestetica.cl>"
-    message.set_content(template.format(**values))
+    text = template.format(**values)
+    lines = "<br>".join(escape(text).splitlines())
+    html = (
+        '<html><body style="font-family:Arial,sans-serif;color:#33282d">'
+        '<img src="https://enfermeraestetica.cl/logo-new-largo-rosa.jpeg" '
+        'width="220" alt="Enfermera Estética" style="max-width:100%;height:auto">'
+        f'<p style="line-height:1.6">{lines}</p></body></html>'
+    )
+    message.set_content(text)
+    message.add_alternative(html, subtype="html")
     if config.agenda_mail_mode=="file":
         folder=ROOT/".agenda-local"/("test-emails" if config.agenda_env=="test" else "emails")
         folder.mkdir(exist_ok=True,parents=True)
@@ -50,7 +60,7 @@ def deliver(job,b):
                 "Authorization":"Bearer "+config.resend_api_key.get_secret_value(),
                 "Idempotency-Key":key},json={
                 "from":config.smtp_sender,"to":[b["customer"]["email"]],
-                "subject":str(message["Subject"]),"text":template.format(**values)})
+                "subject":str(message["Subject"]),"text":text,"html":html})
         if 400<=response.status_code<500:
             raise ValueError(f"Resend rechazó el envío (HTTP {response.status_code}); revisar proveedor")
         response.raise_for_status()
