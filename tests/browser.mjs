@@ -51,7 +51,6 @@ try {
  await page.getByRole("button",{name:"Confirmar nueva hora"}).click();
  await page.getByRole("dialog").waitFor({state:"hidden"});
  await page.getByRole("button",{name:/14:10.*Prueba Navegador/}).click();
- await page.getByPlaceholder("Indica el motivo").fill("Fin de prueba automática de navegador");
  await page.getByRole("button",{name:"Cancelar reserva",exact:true}).click();
  await page.getByRole("dialog").waitFor({state:"hidden"});
  await page.getByRole("button",{name:"Horarios",exact:true}).click();

@@ -12,10 +12,11 @@ from api.agenda.config import config
 from api.agenda.db import connection,lock_agenda,expire,audit
 from api.agenda.security import require_admin,same_origin,digest,rate_limit
 from api.agenda.setup import hash_password
-from api.agenda.schemas import (CategoryChange,BookingRequest,ScheduleChange,ServiceChange,MoveRequest,CancelRequest,BlockRequest,LoginRequest,SettingsChange)
-from api.agenda.schedule import available, candidates, ZONE
+from api.agenda.schemas import (CategoryChange,BookingRequest,AdminBookingRequest,CustomerChange,CustomerUpdate,ScheduleChange,ServiceChange,MoveRequest,CancelRequest,BlockRequest,LoginRequest,SettingsChange)
+from api.agenda.schedule import available, candidates, plan_for, ZONE
 from api.agenda.booking import create_booking,public_booking,service_by_id,checked_start,queue_notifications
 from api.agenda.payments import checkout,apply_event
+from api.agenda.customers import save_customer
 
 router=APIRouter(prefix="/api/agenda")
 admin=APIRouter(prefix="/admin",dependencies=[Depends(require_admin)])
@@ -253,6 +254,52 @@ def admin_availability(day:date,service_id:int,exclude:Optional[UUID]=None):
             service=booking["snapshot"]
         return available(conn,day,service,public=False,exclude=exclude)
 
+@admin.get("/availability/week")
+def week_availability(start:date,end:date):
+    if end<start or (end-start).days>6:
+        raise HTTPException(422,"Consulta un máximo de siete días")
+    with connection() as conn:
+        lock_agenda(conn)
+        expire(conn)
+        durations=conn.execute("SELECT DISTINCT duration FROM agenda_services WHERE active AND deleted_at IS NULL").fetchall()
+        if len(durations)>1:
+            raise HTTPException(409,"Los tratamientos tienen distinta duración. Revisa el catálogo para mostrar disponibilidad común.")
+        result=[]
+        for offset in range((end-start).days+1):
+            day=start+timedelta(days=offset)
+            plan=plan_for(conn,day)
+            slots=[] if plan["closed"] or not durations else available(conn,day,{"duration":durations[0]["duration"]},public=False)
+            result.append({"day":day,"slots":slots})
+        return result
+
+@admin.get("/customers")
+def customers(q:str=Query(default="",max_length=150),offset:int=Query(default=0,ge=0)):
+    # Literal substring matching, including queries containing SQL LIKE wildcards.
+    query=q.strip().lower().replace("!","!!").replace("%","!%").replace("_","!_")
+    with connection() as conn:
+        return conn.execute("""
+          SELECT * FROM agenda_customers
+          WHERE lower(first_name || ' ' || last_name || ' ' || email || ' ' || phone) LIKE %s ESCAPE '!'
+          ORDER BY lower(last_name),lower(first_name),id LIMIT 30 OFFSET %s
+        """,("%"+query+"%",offset)).fetchall()
+
+@admin.post("/customers",status_code=201)
+def add_customer(body:CustomerChange):
+    with connection() as conn:
+        lock_agenda(conn)
+        row=save_customer(conn,body.model_dump())
+        audit(conn,"customer.saved",row["id"])
+        return row
+
+@admin.put("/customers/{id}")
+def update_customer(id:int,body:CustomerUpdate):
+    try:
+        with connection() as conn:
+            lock_agenda(conn)
+            return save_customer(conn,body.model_dump(exclude={"version"}),id,body.version)
+    except UniqueViolation:
+        raise HTTPException(409,"Ya existe otra ficha con esos datos")
+
 @admin.get("/bookings")
 def list_bookings(start:date,end:date):
     if end<start or (end-start).days>62:
@@ -270,8 +317,11 @@ def list_bookings(start:date,end:date):
         return rows
 
 @admin.post("/bookings",status_code=201)
-def manual(body:BookingRequest):
-    booking=create_booking(body,manual=True)
+def manual(body:AdminBookingRequest):
+    try:
+        booking=create_booking(body,manual=True)
+    except UniqueViolation:
+        raise HTTPException(409,"Ya existe otra ficha con esos datos. Selecciónala en el buscador.")
     dispatch_booking(booking["id"])
     return booking
 
@@ -307,7 +357,7 @@ def cancel(id:UUID,body:CancelRequest):
         b=conn.execute("UPDATE agenda_bookings SET status='cancelled',revision=revision+1 WHERE id=%s RETURNING *",(id,)).fetchone()
         if previous=="confirmed":
             queue_notifications(conn,b,"cancellation")
-        audit(conn,"booking.cancelled",id,body.reason)
+        audit(conn,"booking.cancelled",id,body.reason or "Cancelada desde administración")
     dispatch_booking(id)
     return {"ok":True,"message":"Reserva cancelada. No se realizó devolución automática de dinero."}
 

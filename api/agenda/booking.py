@@ -6,6 +6,7 @@ from psycopg.types.json import Jsonb
 from api.agenda.db import connection,lock_agenda,expire,audit
 from api.agenda.schedule import available,ZONE
 from api.agenda.security import digest
+from api.agenda.customers import save_customer
 
 def service_by_id(conn,id,active=True):
     service=conn.execute("SELECT * FROM agenda_services WHERE id=%s",(id,)).fetchone()
@@ -53,8 +54,13 @@ def create_booking(body,manual=False):
           VALUES(%s,%s,%s,%s,%s,%s,%s,CASE WHEN %s THEN NULL ELSE clock_timestamp()+%s*interval '1 minute' END,
           %s,%s,CASE WHEN %s THEN now() ELSE NULL END,%s,%s) RETURNING *""",
           (id,digest(token),service["id"],slot["starts_at"],slot["ends_at"],slot["occupied_until"],
-           "confirmed" if manual else "held",manual,cfg["hold_minutes"],Jsonb(body.customer.model_dump()),Jsonb(snapshot),
+           "confirmed" if manual else "held",manual,cfg["hold_minutes"],Jsonb(body.customer.model_dump(mode="json")),Jsonb(snapshot),
            body.accepted_care,"admin" if manual else "web",body.notes if manual else "")).fetchone()
+        customer_data=body.customer.model_dump()
+        profile=save_customer(conn,customer_data,
+            getattr(body,"customer_id",None) if manual else None,
+            getattr(body,"customer_version",None) if manual else None)
+        conn.execute("UPDATE agenda_bookings SET customer_id=%s WHERE id=%s",(profile["id"],id))
         if manual:
             queue_notifications(conn,row)
         audit(conn,"booking.created",id,"manual" if manual else "web")

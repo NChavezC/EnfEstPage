@@ -102,3 +102,25 @@ Las capturas se guardan dentro de .agenda-local y no se incluyen en Git.
 
 ## Actualización de producción
 El flujo local de reserva, reprogramación y cancelación con SMTP fue validado por el usuario. Neon se inicializó sin reservas locales. Ver AGENDA_VERCEL.md para el envío por API de Resend, variables y requisitos antes del push.
+
+
+## Calendario semanal y clientas
+El calendario muestra siete días con disponibilidad calculada en el servidor. En móvil los días se distribuyen en tarjetas; deslizar horizontalmente cambia de semana. Las flechas y Hoy siguen disponibles. Tocar un horario permite reservarlo o bloquearlo, incluyendo el descanso previsto. El historial conserva las reservas canceladas y vencidas.
+
+La pestaña Clientas permite buscar, crear y editar fichas. En una reserva interna el buscador rellena los datos; al confirmar se guardan ficha y reserva en una sola transacción. Editar una ficha no modifica los datos, precios ni cuidados históricos. Las modificaciones verifican la versión de la ficha. Las reservas públicas no pueden editar fichas existentes ni indicar su identificador privado.
+
+La coincidencia automática requiere nombre, apellidos, correo y teléfono; compartir solo teléfono o correo no fusiona fichas. Una fecha de nacimiento distinta en una coincidencia completa requiere revisar la ficha. La fecha de nacimiento es opcional.
+
+### Orden de despliegue de 004_customers.sql
+1. Ejecutar la suite contra PostgreSQL local, incluida la migración sobre reservas existentes.
+2. Con la configuración de la base destino, ejecutar python -m api.agenda.setup antes de publicar el código nuevo. La migración añade tabla e índice de clientas y una relación nullable; conserva los JSON históricos y es compatible con el código anterior.
+3. Publicar el commit y verificar el despliegue. Volver al código anterior no requiere eliminar la tabla ni la columna.
+
+La prueba node tests/browser-calendar-clients.mjs requiere una API aislada con enfest_agenda_ui_test, correo en archivo, pago mock y usuario de prueba. No ejecutarla contra producción. Recorre /admin en escritorio y a 390 × 844, incluida selección táctil, clientes, reserva, reprogramación, bloqueo, liberación, cancelación y auditoría. Con TEST_WEBKIT=1 utiliza WebKit instalado mediante Playwright. No sustituye una prueba en un iPhone físico.
+
+Para repetir el recorrido: iniciar PostgreSQL local, ejecutar python -m tests.serve_agenda_ui en una terminal y npm run dev -- --host 127.0.0.1 en otra. Luego ejecutar node tests/browser-calendar-clients.mjs. El servidor de pruebas verifica que PostgreSQL sea local, utiliza exclusivamente enfest_agenda_ui_test y configura la contraseña ficticia test-password. No iniciar el worker SMTP normal durante estas pruebas.
+
+## Validación — 12 de noviembre de 2026
+40 casos de backend validados: 39 aprobados en la suite y el caso de correo multipart aprobado al repetirlo tras actualizar su lectura. Lint sin advertencias y compilación Vite aprobados. Recorrido completo de administración aprobado en Chrome y WebKit, en escritorio y viewport táctil 390 × 844, con navegador en Europe/London y agenda en America/Santiago. Los gestos se simulan; no se usó un iPhone físico.
+
+Migración 004 aplicada en enfest_agenda_test, enfest_agenda_ui_test y Neon de producción antes del push. En Neon se verificó la conservación de los JSON históricos de las 15 reservas existentes: 7 fichas creadas y 13 reservas vinculadas. La base local de desarrollo enfest no se migró en esta validación; el arranque habitual aplica las migraciones pendientes. Las pruebas usaron exclusivamente correos en archivo y pagos mock.

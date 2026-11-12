@@ -76,18 +76,37 @@ class BookingRequest(Strict):
     accepted_care: bool = False
     notes: str = Field(default="", max_length=5000)
 
+class CustomerChange(PaymentRequest):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    birth_date: Optional[date] = None
+
+    @model_validator(mode="after")
+    def valid_birth_date(self):
+        from api.agenda.schedule import ZONE
+        if self.birth_date and self.birth_date > datetime.now(ZONE).date():
+            raise ValueError("La fecha de nacimiento no puede estar en el futuro")
+        return self
+
+class CustomerUpdate(CustomerChange):
+    version: int = Field(ge=1)
+
+class AdminBookingRequest(BookingRequest):
+    customer: CustomerChange
+    customer_id: Optional[int] = Field(default=None, ge=1)
+    customer_version: Optional[int] = Field(default=None, ge=1)
+
 class MoveRequest(Strict):
     starts_at: datetime
     revision: int
 
 class CancelRequest(Strict):
     revision: int
-    reason: str = Field(min_length=3, max_length=1000)
+    reason: str = Field(default="", max_length=1000)
 
 class BlockRequest(Strict):
     starts_at: datetime
     ends_at: datetime
-    reason: str = Field(min_length=3, max_length=200)
+    reason: str = Field(default="", max_length=200)
 
 class LoginRequest(Strict):
     password: str = Field(min_length=1, max_length=200)

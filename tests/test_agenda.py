@@ -15,8 +15,10 @@ from api.agenda.config import config
 TEST_DATABASE="enfest_agenda_test"
 original=config.database_url.get_secret_value()
 from psycopg.conninfo import conninfo_to_dict,make_conninfo
+if conninfo_to_dict(original).get("host") not in {"localhost", "127.0.0.1", "::1"}:
+    raise RuntimeError("Las pruebas requieren PostgreSQL local; no usar producción")
 test_url=make_conninfo(original,dbname=TEST_DATABASE)
-with psycopg.connect(original,dbname="postgres",autocommit=True) as root:
+with psycopg.connect(original,dbname="postgres",autocommit=True,connect_timeout=10) as root:
     if not root.execute("SELECT 1 FROM pg_database WHERE datname=%s",(TEST_DATABASE,)).fetchone():
         root.execute('CREATE DATABASE enfest_agenda_test')
 from pydantic import SecretStr
@@ -288,9 +290,9 @@ def test_manual_email_uses_actual_unpaid_balance():
         assert c.execute("SELECT count(*) AS n FROM agenda_jobs WHERE kind='reminder'").fetchone()["n"]==1
         job=c.execute("SELECT id FROM agenda_jobs WHERE kind='confirmation'").fetchone()["id"]
     assert run_once()
-    from email import message_from_bytes
-    mail=message_from_bytes((ROOT/".agenda-local"/"test-emails"/f"{job}.eml").read_bytes())
-    assert "28000" in mail.get_payload(decode=True).decode()
+    from email import message_from_bytes, policy
+    mail=message_from_bytes((ROOT/".agenda-local"/"test-emails"/f"{job}.eml").read_bytes(), policy=policy.default)
+    assert "28000" in mail.get_body(preferencelist=("plain",)).get_content()
 
 def test_conflicting_move_preserves_original_reservation():
     login()
@@ -564,3 +566,95 @@ def test_delete_catalog_preserves_paid_booking_and_management():
     initialize()
     assert client.get("/api/agenda/admin/services").json()==[]
     assert client.get("/api/agenda/admin/categories").json()==[]
+
+
+def test_customer_identity_privacy_versions_and_snapshots():
+    assert client.get("/api/agenda/admin/customers").status_code == 401
+    login()
+    person = dict(request_body()["customer"], birth_date="1990-02-28")
+    c = client.post("/api/agenda/admin/customers", json=person).json()
+    other = client.post("/api/agenda/admin/customers", json=dict(person, first_name="Otra")).json()
+    assert c["id"] != other["id"]  # Shared contact information is not identity.
+    body = dict(request_body(), customer=person, customer_id=c["id"], customer_version=c["version"])
+    created = client.post("/api/agenda/admin/bookings", json=body)
+    assert created.status_code == 201, created.text
+    booking = created.json()
+    current = next(x for x in client.get("/api/agenda/admin/customers").json() if x["id"] == c["id"])
+    edited = dict(person, first_name="Editada", version=current["version"])
+    assert client.put(f"/api/agenda/admin/customers/{c['id']}", json=edited).status_code == 200
+    assert client.put(f"/api/agenda/admin/customers/{c['id']}", json=edited).status_code == 409
+    with connection() as conn:
+        snapshot = conn.execute("SELECT customer FROM agenda_bookings WHERE id=%s", (booking["id"],)).fetchone()["customer"]
+        assert snapshot["first_name"] == person["first_name"] and snapshot["birth_date"] == "1990-02-28"
+    public = request_body()
+    public["customer"] = dict(person, first_name="Editada")
+    public["customer"].pop("birth_date")
+    assert client.post("/api/agenda/bookings", json=public).status_code == 201
+    with connection() as conn:
+        private = conn.execute("SELECT * FROM agenda_customers WHERE id=%s", (c["id"],)).fetchone()
+        assert private["version"] == current["version"] + 1
+        assert str(private["birth_date"]) == "1990-02-28"
+    public["customer_id"] = c["id"]
+    assert client.post("/api/agenda/bookings", json=public).status_code == 422
+
+
+def test_customer_and_booking_rollback_on_conflict():
+    login()
+    person = dict(request_body()["customer"], birth_date=None)
+    c = client.post("/api/agenda/admin/customers", json=person).json()
+    body = dict(request_body(), customer=person, customer_id=c["id"], customer_version=c["version"] + 5)
+    assert client.post("/api/agenda/admin/bookings", json=body).status_code == 409
+    with connection() as conn:
+        assert conn.execute("SELECT count(*) AS n FROM agenda_bookings").fetchone()["n"] == 0
+    reserve()
+    body["customer_id"] = None
+    body["customer_version"] = None
+    body["customer"]["first_name"] = "NoPersistir"
+    assert client.post("/api/agenda/admin/bookings", json=body).status_code == 409
+    assert client.get("/api/agenda/admin/customers?q=NoPersistir").json() == []
+
+
+def test_week_availability_block_release_cancel_without_reason():
+    login()
+    start = future_monday()
+    params = {"start":str(start),"end":str(start+timedelta(days=6))}
+    week = client.get("/api/agenda/admin/availability/week", params=params)
+    assert week.status_code == 200, week.text
+    assert len(week.json()) == 7
+    s = week.json()[0]["slots"][0]
+    body = {"starts_at":s["starts_at"],"ends_at":s["occupied_until"]}
+    block = client.post("/api/agenda/admin/blocks", json=body)
+    assert block.status_code == 201, block.text
+    assert client.post("/api/agenda/admin/blocks", json=body).status_code == 409
+    assert len(client.get("/api/agenda/admin/availability/week", params=params).json()[0]["slots"]) == 2
+    id = block.json()["id"]
+    assert client.post(f"/api/agenda/admin/bookings/{id}/cancel", json={"revision":1}).status_code == 200
+    assert client.post(f"/api/agenda/admin/bookings/{id}/cancel", json={"revision":1}).status_code == 409
+    assert len(client.get("/api/agenda/admin/availability/week", params=params).json()[0]["slots"]) == 3
+    b = client.post("/api/agenda/admin/bookings", json=request_body()).json()
+    assert client.post(f"/api/agenda/admin/bookings/{b['id']}/cancel", json={"revision":1}).status_code == 200
+    with connection() as conn:
+        assert conn.execute("SELECT count(*) AS n FROM agenda_audit WHERE action='booking.cancelled'").fetchone()["n"] == 2
+        assert conn.execute("SELECT count(*) AS n FROM agenda_jobs WHERE kind='cancellation' AND status='queued'").fetchone()["n"] == 1
+
+
+def test_customer_migration_preserves_historical_data():
+    first = reserve()
+    body = request_body()
+    second = client.post("/api/agenda/bookings", json=body).json()
+    body = request_body()
+    body["customer"]["first_name"] = "Otra"
+    third = client.post("/api/agenda/bookings", json=body).json()
+    with connection() as conn:
+        before = conn.execute("SELECT id,customer,snapshot,status FROM agenda_bookings ORDER BY id").fetchall()
+        conn.execute("ALTER TABLE agenda_bookings DROP COLUMN customer_id")
+        conn.execute("DROP TABLE agenda_customers")
+        conn.execute("DELETE FROM agenda_migrations WHERE version='004_customers.sql'")
+    initialize()
+    initialize()
+    with connection() as conn:
+        assert conn.execute("SELECT id,customer,snapshot,status FROM agenda_bookings ORDER BY id").fetchall() == before
+        links = {str(r["id"]):r["customer_id"] for r in conn.execute("SELECT id,customer_id FROM agenda_bookings")}
+        assert links[first["id"]] == links[second["id"]]
+        assert links[first["id"]] != links[third["id"]]
+        assert conn.execute("SELECT count(*) AS n FROM agenda_customers").fetchone()["n"] == 2
