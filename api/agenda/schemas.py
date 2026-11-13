@@ -51,6 +51,7 @@ class ServiceChange(Strict):
     price: int = Field(ge=1, le=10000000)
     deposit: int = Field(ge=1)
     duration: int = Field(default=120, ge=10, le=480)
+    description: str = Field(default="PRUEBA DESCRIPCIÓN", max_length=10000)
     care: str = Field(min_length=1, max_length=10000)
     confirmation: str = Field(min_length=1, max_length=10000)
     reminder: str = Field(min_length=1, max_length=10000)

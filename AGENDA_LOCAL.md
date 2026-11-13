@@ -146,3 +146,9 @@ Pruebas locales con la API aislada de `tests.serve_agenda_ui` y Vite:
 - `node tests/browser-calendar-clients.mjs`: regresión de administración.
 
 Este rediseño no requiere migración ni cambios en la configuración de producción.
+
+## Descripciones públicas de tratamientos
+
+La migración `005_service_description.sql` agrega `description` con el texto inicial `PRUEBA DESCRIPCIÓN`. Es independiente de `care` y de las plantillas de correo. Se edita en Tratamientos y cuidados → Editar → Descripción para la web; las copias conservan la descripción. El texto se presenta literalmente, con saltos de línea, solo en la ficha pública del tratamiento. No se incorpora al modal previo al pago ni a los correos.
+
+Validación: `pytest tests/test_agenda.py -q -k public_description` y `node tests/browser-service-description.mjs` (también WebKit con las variables descritas arriba). Prueban migración sobre datos anteriores, conservación de reservas, edición persistente, copia, validación de longitud y separación del modal de cuidados.

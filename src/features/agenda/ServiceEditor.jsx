@@ -6,6 +6,7 @@ const empty = {
   price: 0,
   deposit: 10000,
   duration: 120,
+  description: "PRUEBA DESCRIPCIÓN",
   care: "CUIDADOS PREVIOS",
   confirmation: "Hola {nombre}, tu reserva de {tratamiento} para {fecha} está confirmada. Cuidados: {cuidados}",
   reminder: "Hola {nombre}, recuerda tu cita de {tratamiento} el {fecha}. {cuidados}",
@@ -152,6 +153,8 @@ export default function ServiceEditor() {
               ...form,
               [key]: Number(e.target.value)
             })} className="border border-[var(--color-highlight)] rounded-[9px] px-3 py-2.5 bg-[var(--color-surface)] min-w-0 w-full text-[var(--color-body)] font-normal" /></label>)}</div>
+      <label className="flex flex-col gap-1.5 text-sm font-[550] mt-3 mb-3">Descripción para la web<textarea aria-label="Descripción para la web" maxLength={10000} rows={5} value={form.description ?? ""} onChange={e => setForm({ ...form, description: e.target.value })} className={field} /></label>
+      <p className="mb-4 text-sm text-[var(--color-muted)]">Se muestra en la página del tratamiento. No aparece en la verificación previa al pago ni en los correos.</p>
       <label className="flex flex-col gap-1.5 text-sm font-[550] mt-3 mb-3">Cuidados previos<textarea aria-label="Cuidados previos" required value={form.care} onChange={e => setForm({
             ...form,
             care: e.target.value

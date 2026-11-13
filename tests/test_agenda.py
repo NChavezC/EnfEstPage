@@ -658,3 +658,43 @@ def test_customer_migration_preserves_historical_data():
         assert links[first["id"]] == links[second["id"]]
         assert links[first["id"]] != links[third["id"]]
         assert conn.execute("SELECT count(*) AS n FROM agenda_customers").fetchone()["n"] == 2
+
+def test_public_description_migration_and_independent_editing():
+    from api.agenda.schemas import ServiceChange
+    booking = reserve()
+    with connection() as c:
+        before = c.execute("SELECT snapshot FROM agenda_bookings WHERE id=%s", (booking["id"],)).fetchone()["snapshot"]
+        c.execute("ALTER TABLE agenda_services DROP COLUMN description")
+        c.execute("DELETE FROM agenda_migrations WHERE version='005_service_description.sql'")
+    initialize()
+    initialize()
+    catalog = client.get("/api/agenda/catalog").json()
+    assert all(s["description"] == "PRUEBA DESCRIPCIÓN" for s in catalog["services"])
+    login()
+    service = client.get("/api/agenda/admin/services").json()[0]
+    payload = {k: service[k] for k in ServiceChange.model_fields}
+    payload["description"] = "Texto propio\nSegunda línea <script>sin ejecutar</script>"
+    response = client.put(f"/api/agenda/admin/services/{service['id']}", json=payload)
+    assert response.status_code == 200, response.text
+    updated = client.get("/api/agenda/catalog").json()["services"][0]
+    assert updated["description"] == payload["description"]
+    assert updated["care"] == service["care"]
+    assert updated["price"] == service["price"]
+    assert updated["version"] == service["version"] + 1
+    public = client.get("/api/agenda/bookings/" + booking["token"]).json()
+    assert "description" not in public
+    assert public["care"] == before["care"]
+    with connection() as c:
+        assert c.execute("SELECT snapshot FROM agenda_bookings WHERE id=%s", (booking["id"],)).fetchone()["snapshot"] == before
+    legacy_payload = {k: v for k, v in payload.items() if k != "description"}
+    assert client.put(f"/api/agenda/admin/services/{service['id']}", json=legacy_payload).status_code == 200
+    assert client.get("/api/agenda/catalog").json()["services"][0]["description"] == payload["description"]
+    payload["name"] = "Copia de prueba"
+    response = client.post("/api/agenda/admin/services", json=payload)
+    assert response.status_code == 201, response.text
+    copied = next(s for s in client.get("/api/agenda/catalog").json()["services"] if s["id"] == response.json()["id"])
+    assert copied["description"] == payload["description"]
+    payload["description"] = ""
+    assert client.put(f"/api/agenda/admin/services/{service['id']}", json=payload).status_code == 200
+    payload["description"] = "x" * 10001
+    assert client.put(f"/api/agenda/admin/services/{service['id']}", json=payload).status_code == 422
