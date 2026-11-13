@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import Modal from "./Modal";
+import TreatmentPhoto from "../../ui/TreatmentPhoto";
 import { api, money } from "./api";
 const empty = {
   name: "",
@@ -7,6 +8,7 @@ const empty = {
   deposit: 10000,
   duration: 120,
   description: "PRUEBA DESCRIPCIÓN",
+  images: [],
   care: "CUIDADOS PREVIOS",
   confirmation: "Hola {nombre}, tu reserva de {tratamiento} para {fecha} está confirmada. Cuidados: {cuidados}",
   reminder: "Hola {nombre}, recuerda tu cita de {tratamiento} el {fecha}. {cuidados}",
@@ -20,6 +22,7 @@ export default function ServiceEditor() {
     [filter, setFilter] = useState(""),
     [title, setTitle] = useState(""),
     [form, setForm] = useState(null),
+    [imagePaths, setImagePaths] = useState(""),
     [deletion, setDeletion] = useState(null),
     [error, setError] = useState(""),
     [message, setMessage] = useState(""),
@@ -30,6 +33,7 @@ export default function ServiceEditor() {
   }, []);
   function edit(s, heading) {
     setTitle(heading);
+    setImagePaths((s.images || []).join("\n"));
     setForm({
       ...s
     });
@@ -50,7 +54,7 @@ export default function ServiceEditor() {
       void version;
       await api("/admin/services" + (id ? "/" + id : ""), {
         method: id ? "PUT" : "POST",
-        body: JSON.stringify(body)
+        body: JSON.stringify({ ...body, images: imagePaths.split(/\r?\n/).map(p => p.trim()).filter(Boolean) })
       });
       await load();
       setMessage("Tratamiento guardado. Las reservas anteriores conservan sus precios y cuidados.");
@@ -155,6 +159,11 @@ export default function ServiceEditor() {
             })} className="border border-[var(--color-highlight)] rounded-[9px] px-3 py-2.5 bg-[var(--color-surface)] min-w-0 w-full text-[var(--color-body)] font-normal" /></label>)}</div>
       <label className="flex flex-col gap-1.5 text-sm font-[550] mt-3 mb-3">Descripción para la web<textarea aria-label="Descripción para la web" maxLength={10000} rows={5} value={form.description ?? ""} onChange={e => setForm({ ...form, description: e.target.value })} className={field} /></label>
       <p className="mb-4 text-sm text-[var(--color-muted)]">Se muestra en la página del tratamiento. No aparece en la verificación previa al pago ni en los correos.</p>
+      <label className="my-4 grid gap-2">Fotos para la web
+        <textarea aria-label="Fotos para la web" className={field} rows={4} value={imagePaths} onChange={e => setImagePaths(e.target.value)} placeholder="/tratamientos/foto-01.jpg" aria-describedby="service-images-help" />
+      </label>
+      <p id="service-images-help" className="mb-4 text-sm text-[var(--color-muted)]">Una ruta por línea, hasta 10 fotos. El orden de las líneas define el orden de las fotos. Para quitar una foto, borra su línea. Ejemplo: public/tratamientos/foto.jpg se escribe /tratamientos/foto.jpg. Los archivos nuevos deben estar publicados en public antes de usar su ruta.</p>
+      <div className="service-image-previews">{imagePaths.split(/\r?\n/).map(p => p.trim()).filter(Boolean).slice(0, 10).map((path, i) => <figure key={path + i}><TreatmentPhoto src={path} alt={"Vista previa de la foto " + (i + 1)} eager /><figcaption>Foto {i + 1}</figcaption></figure>)}</div>
       <label className="flex flex-col gap-1.5 text-sm font-[550] mt-3 mb-3">Cuidados previos<textarea aria-label="Cuidados previos" required value={form.care} onChange={e => setForm({
             ...form,
             care: e.target.value

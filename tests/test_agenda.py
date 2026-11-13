@@ -698,3 +698,53 @@ def test_public_description_migration_and_independent_editing():
     assert client.put(f"/api/agenda/admin/services/{service['id']}", json=payload).status_code == 200
     payload["description"] = "x" * 10001
     assert client.put(f"/api/agenda/admin/services/{service['id']}", json=payload).status_code == 422
+
+def test_catalog_import_preserves_custom_content_and_booking_history():
+    from api.agenda.import_catalog import import_catalog
+    booking = reserve()
+    with connection() as c:
+        before = c.execute("SELECT snapshot FROM agenda_bookings WHERE id=%s", (booking["id"],)).fetchone()["snapshot"]
+        services = c.execute("SELECT * FROM agenda_services ORDER BY id").fetchall()
+        custom = services[1]["id"]
+        c.execute("UPDATE agenda_services SET description='Descripción propia',images=%s WHERE id=%s",
+                  (psycopg.types.json.Jsonb(["/logo-new.jpeg"]), custom))
+    preview = import_catalog()
+    assert preview["matched"] == 3 and len(preview["updated"]) == 2
+    assert client.get("/api/agenda/catalog").json()["services"][0]["description"] == "PRUEBA DESCRIPCIÓN"
+    report = import_catalog(apply=True)
+    assert len(report["updated"]) == 2 and report["preserved"] == [custom]
+    catalog = client.get("/api/agenda/catalog").json()["services"]
+    assert catalog[0]["description"].startswith("Limpieza profunda, renovación")
+    assert len(catalog[0]["images"]) == 2
+    assert catalog[1]["description"] == "Descripción propia"
+    assert catalog[1]["images"] == ["/logo-new.jpeg"]
+    for old, new in zip(services, catalog):
+        assert all(old[k] == new[k] for k in ("price", "deposit", "care", "duration"))
+    assert import_catalog(apply=True)["updated"] == []
+    with connection() as c:
+        assert c.execute("SELECT snapshot FROM agenda_bookings WHERE id=%s", (booking["id"],)).fetchone()["snapshot"] == before
+        assert c.execute("SELECT count(*) AS n FROM agenda_audit WHERE action='service.catalog_imported'").fetchone()["n"] == 2
+
+def test_service_images_validation_copy_and_legacy_save():
+    from api.agenda.schemas import ServiceChange
+    login()
+    service = client.get("/api/agenda/admin/services").json()[0]
+    payload = {k: service[k] for k in ServiceChange.model_fields}
+    payload["images"] = ["/tratamientos/limpieza-facial-profunda-01.jpeg", "/logo-new.jpeg"]
+    assert client.put(f"/api/agenda/admin/services/{service['id']}", json=payload).status_code == 200
+    legacy = {k:v for k,v in payload.items() if k != "images"}
+    assert client.put(f"/api/agenda/admin/services/{service['id']}", json=legacy).status_code == 200
+    assert client.get("/api/agenda/catalog").json()["services"][0]["images"] == payload["images"]
+    payload["name"] = "Copia con fotos"
+    response = client.post("/api/agenda/admin/services", json=payload)
+    assert response.status_code == 201, response.text
+    copied = next(s for s in client.get("/api/agenda/catalog").json()["services"] if s["id"] == response.json()["id"])
+    assert copied["images"] == payload["images"]
+    for invalid in [["https://example.com/photo.jpg"], ["//example.com/photo.jpg"], ["/../photo.jpg"],
+                    ["/a/%2e%2e/photo.jpg"], ["/photo.svg"], ["/photo.jpg?x=1"], ["/public/photo.jpg"],
+                    ["/photo.jpg", "/photo.jpg"], [f"/photo{i}.jpg" for i in range(11)]]:
+        payload["images"] = invalid
+        assert client.put(f"/api/agenda/admin/services/{service['id']}", json=payload).status_code == 422
+    payload["images"] = []
+    assert client.put(f"/api/agenda/admin/services/{service['id']}", json=payload).status_code == 200
+    assert client.get("/api/agenda/catalog").json()["services"][0]["images"] == []

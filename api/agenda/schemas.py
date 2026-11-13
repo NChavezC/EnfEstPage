@@ -2,7 +2,7 @@ from __future__ import annotations
 from typing import Optional
 from datetime import date, datetime
 from typing import Literal
-from pydantic import BaseModel, Field, ConfigDict, model_validator
+from pydantic import BaseModel, Field, ConfigDict, model_validator, field_validator
 from api.schemas import PaymentRequest
 
 class Strict(BaseModel):
@@ -52,11 +52,27 @@ class ServiceChange(Strict):
     deposit: int = Field(ge=1)
     duration: int = Field(default=120, ge=10, le=480)
     description: str = Field(default="PRUEBA DESCRIPCIÓN", max_length=10000)
+    images: list[str] = Field(default_factory=list, max_length=10)
     care: str = Field(min_length=1, max_length=10000)
     confirmation: str = Field(min_length=1, max_length=10000)
     reminder: str = Field(min_length=1, max_length=10000)
     reminder_hours: Optional[int] = Field(default=None, ge=1, le=720)
     active: bool = True
+
+    @field_validator("images")
+    @classmethod
+    def local_image_paths(cls, paths):
+        import re
+        cleaned = [p.strip() for p in paths]
+        for path in cleaned:
+            if (len(path) > 500 or not path.startswith("/") or path.startswith("//")
+                or path.startswith("/public/") or re.search(r"[\\%?#\x00-\x1f]", path)
+                or any(part in {".", "..", ""} for part in path[1:].split("/"))
+                or not re.search(r"\.(jpe?g|png|webp|avif)$", path, re.I)):
+                raise ValueError("Usa rutas locales como /tratamientos/foto.jpg, sin public, dominios ni parámetros")
+        if len(set(cleaned)) != len(cleaned):
+            raise ValueError("No repitas la misma foto")
+        return cleaned
 
     @model_validator(mode="after")
     def valid(self):

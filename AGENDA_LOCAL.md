@@ -152,3 +152,17 @@ Este rediseño no requiere migración ni cambios en la configuración de producc
 La migración `005_service_description.sql` agrega `description` con el texto inicial `PRUEBA DESCRIPCIÓN`. Es independiente de `care` y de las plantillas de correo. Se edita en Tratamientos y cuidados → Editar → Descripción para la web; las copias conservan la descripción. El texto se presenta literalmente, con saltos de línea, solo en la ficha pública del tratamiento. No se incorpora al modal previo al pago ni a los correos.
 
 Validación: `pytest tests/test_agenda.py -q -k public_description` y `node tests/browser-service-description.mjs` (también WebKit con las variables descritas arriba). Prueban migración sobre datos anteriores, conservación de reservas, edición persistente, copia, validación de longitud y separación del modal de cuidados.
+
+## Contenido del catálogo y fotos
+
+Las 16 fichas del PDF se relacionan por nombre con 29 tratamientos en api/agenda/catalog_content.json. Se extrajeron 39 imágenes en public/tratamientos; las comparativas de abdomen conservan juntas las dos fotos del mismo caso. La importación no modifica precios, duración, cuidados, plantillas de correo ni snapshots de reservas.
+
+En Administración → Tratamientos y cuidados → Editar, usar Descripción para la web y Fotos para la web. Las fotos se escriben como rutas locales, una por línea (hasta 10), por ejemplo /tratamientos/limpieza-facial-profunda-01.jpeg. El orden de las líneas determina el orden de las fotos; borrar una línea quita la foto del tratamiento. Las vistas previas indican archivos inexistentes. Un archivo nuevo debe agregarse primero a public y publicarse con el repositorio; escribir una ruta no sube archivos. Solo se admiten JPEG, PNG, WebP y AVIF locales.
+
+La migración 006 agrega images. Después de migrar, python -m api.agenda.import_catalog muestra una revisión previa; agregar --apply guarda los cambios. El importador usa coincidencias exactas normalizadas de nombre, aborta ante nombres ambiguos, reemplaza solo descripciones vacías/de prueba y agrega imágenes solo a listas vacías. Las ediciones propias se conservan, se incrementa la versión y se registra la importación en auditoría. Revisar el campo unmatched antes de aplicar en otro entorno.
+
+Validación: pytest tests/test_agenda.py -q -k 'catalog_import or service_images' y node tests/browser-catalog-content.mjs. La prueba de navegador usa la API aislada de tests.serve_agenda_ui con los 29 nombres de catálogo preparados en enfest_agenda_ui_test; no debe ejecutarse contra producción.
+
+Para preparar las 29 fichas ficticias: python -m tests.prepare_catalog_ui, luego iniciar python -m tests.serve_agenda_ui y Vite. El script comprueba que PostgreSQL sea local y solo escribe en enfest_agenda_ui_test.
+
+Orden de publicación: aplicar 006 (columna de fotos), desplegar código y archivos public, verificar las imágenes publicadas y recién entonces ejecutar la importación de contenido en la base de destino. Así no se publican rutas a fotos que aún no existen.

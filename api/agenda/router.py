@@ -24,7 +24,7 @@ admin=APIRouter(prefix="/admin",dependencies=[Depends(require_admin)])
 @router.get("/catalog")
 def catalog():
     with connection() as conn:
-        services=conn.execute("""SELECT id,category_id,name,price,deposit,duration,description,care,version FROM agenda_services
+        services=conn.execute("""SELECT id,category_id,name,price,deposit,duration,description,images,care,version FROM agenda_services
           WHERE active AND deleted_at IS NULL ORDER BY id""").fetchall()
         categories=conn.execute("SELECT id,name FROM agenda_categories WHERE id IN (SELECT category_id FROM agenda_services WHERE active AND deleted_at IS NULL) ORDER BY lower(name),id").fetchall()
     return {"categories":categories,"services":services,"payment_mode":config.agenda_payment_mode,"timezone":"America/Santiago"}
@@ -175,10 +175,11 @@ def edit_service(id:int,body:ServiceChange):
             raise HTTPException(404,"Tratamiento eliminado")
         check_category(conn,body.category_id)
         data=body.model_dump()
+        data["images"] = Jsonb(body.images) if "images" in body.model_fields_set else None
         if "description" not in body.model_fields_set:
             data["description"] = None
         conn.execute("""UPDATE agenda_services SET category_id=%(category_id)s,name=%(name)s,price=%(price)s,deposit=%(deposit)s,
-          duration=%(duration)s,description=COALESCE(%(description)s,description),care=%(care)s,confirmation=%(confirmation)s,reminder=%(reminder)s,
+          duration=%(duration)s,description=COALESCE(%(description)s,description),images=COALESCE(%(images)s,images),care=%(care)s,confirmation=%(confirmation)s,reminder=%(reminder)s,
           reminder_hours=%(reminder_hours)s,active=%(active)s,version=version+1 WHERE id=%(id)s""",dict(data,id=id))
         audit(conn,"service.updated",id)
     return {"ok":True}
@@ -187,9 +188,9 @@ def edit_service(id:int,body:ServiceChange):
 def add_service(body:ServiceChange):
     with connection() as conn:
         check_category(conn,body.category_id)
-        row=conn.execute("""INSERT INTO agenda_services(category_id,name,price,deposit,duration,description,care,confirmation,reminder,reminder_hours,active)
-          VALUES(%(category_id)s,%(name)s,%(price)s,%(deposit)s,%(duration)s,%(description)s,%(care)s,%(confirmation)s,%(reminder)s,%(reminder_hours)s,%(active)s)
-          RETURNING id""",body.model_dump()).fetchone()
+        row=conn.execute("""INSERT INTO agenda_services(category_id,name,price,deposit,duration,description,images,care,confirmation,reminder,reminder_hours,active)
+          VALUES(%(category_id)s,%(name)s,%(price)s,%(deposit)s,%(duration)s,%(description)s,%(images)s,%(care)s,%(confirmation)s,%(reminder)s,%(reminder_hours)s,%(active)s)
+          RETURNING id""",dict(body.model_dump(), images=Jsonb(body.images))).fetchone()
         audit(conn,"service.created",row["id"])
     return row
 

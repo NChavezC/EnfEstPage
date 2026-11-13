@@ -184,3 +184,7 @@
 .back-link{margin-bottom:30px}.treatment-page>h1{margin-bottom:35px}.site-footer{padding-top:35px}
 }
 @media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}.site-button,.treatment-row{transition:none}}
+
+.treatment-gallery{display:grid;gap:20px;margin-bottom:35px}.treatment-gallery img{display:block;width:100%;max-height:540px;object-fit:contain;background:#f8f7f5;border-radius:3px}.service-image-previews{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:12px;margin:20px 0}.service-image-previews img{width:100%;height:140px;object-fit:contain;background:#f8f7f5}.service-image-previews figcaption{font-size:12px;margin-top:6px}.photo-unavailable{padding:18px;border:1px dashed #b9a4ad;font-size:13px;color:#69525c}
+
+.treatment-gallery{grid-template-columns:repeat(2,minmax(0,1fr));margin-top:30px}.treatment-gallery img{height:320px}.treatment-gallery figure:only-child{grid-column:1/-1}.treatment-gallery figure:only-child img{height:auto;max-height:500px}@media(max-width:480px){.treatment-gallery{gap:12px}.treatment-gallery img{height:230px}}

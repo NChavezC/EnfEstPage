@@ -10,7 +10,7 @@ try {
   const page=await context.newPage();page.setDefaultTimeout(60000);
   const catalog=await(await context.request.get(base+"/api/agenda/catalog")).json();
   for(const s of catalog.services){
-   assert.equal(s.description,"PRUEBA DESCRIPCIÓN");
+   assert.equal(typeof s.description,"string");
    await page.goto(base+"/tratamientos/"+s.id);
    assert.equal(await page.getByTestId("treatment-description").innerText(),s.description);
   }
@@ -23,7 +23,7 @@ try {
   await item.getByRole("button",{name:"Editar",exact:true}).click();
   const text="Descripción independiente\nSegunda línea <b>texto literal</b>";
   const dialog=page.getByRole("dialog");
-  assert.equal(await dialog.getByLabel("Descripción para la web",{exact:true}).inputValue(),"PRUEBA DESCRIPCIÓN");
+  assert.equal(await dialog.getByLabel("Descripción para la web",{exact:true}).inputValue(),service.description);
   const care=await dialog.getByLabel("Cuidados previos",{exact:true}).inputValue();
   await dialog.getByLabel("Descripción para la web",{exact:true}).fill(text);
   await dialog.getByRole("button",{name:"Guardar tratamiento",exact:true}).click();
@@ -52,7 +52,7 @@ try {
   const services=await(await context.request.get(base+"/api/agenda/admin/services")).json();
   const original=services.find(s=>s.id===service.id);
   const {id,version,...body}=original;void version;
-  const restored=await context.request.put(base+"/api/agenda/admin/services/"+id,{headers:{Origin:base},data:{...body,description:"PRUEBA DESCRIPCIÓN"}});
+  const restored=await context.request.put(base+"/api/agenda/admin/services/"+id,{headers:{Origin:base},data:{...body,description:service.description}});
   assert.equal(restored.status(),200);
   await context.close();
   console.log(engine.name(),mobile?"mobile":"desktop","PASS: all descriptions, persisted edit, literal text, unchanged care, description absent from checkout dialog.");
