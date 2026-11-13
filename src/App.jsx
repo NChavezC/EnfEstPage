@@ -6,7 +6,8 @@ import Payment from "./pages/Payment";
 import PaymentResult from "./pages/PaymentResult";
 import AppLayout from "./ui/AppLayout";
 import PaymentCancelled from "./pages/PaymentCancelled";
-import Catalog from "./pages/Catalog";
+import Treatments from "./pages/Treatments";
+import Treatment from "./pages/Treatment";
 import PageNotFound from "./pages/PageNotFound";
 
 import Booking from "./pages/Booking";
@@ -22,7 +23,9 @@ function App() {
           <Route path="home" element={<Home />} />
           <Route path="contact" element={<Contact />} />
           <Route path="before-after" element={<BeforeAfter />} />
-          <Route path="catalogo" element={<Catalog />} />
+          <Route path="catalogo" element={<Navigate replace to="/tratamientos" />} />
+          <Route path="tratamientos" element={<Treatments />} />
+          <Route path="tratamientos/:serviceId" element={<Treatment />} />
           <Route path="reservar" element={<Booking />} />
           <Route path="reservar/resultado" element={<BookingResult />} />
           <Route path="reservar/resultado/:bookingToken" element={<BookingResult />} />

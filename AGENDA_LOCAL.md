@@ -134,3 +134,15 @@ Mantener pulsada una reserva confirmada durante aproximadamente medio segundo ac
 El backend vuelve a comprobar disponibilidad y revisión al guardar; una ocupación concurrente muestra un error y conserva la cita. Se mantienen precios, cuidados, pagos, auditoría y notificaciones. No hay migración de base de datos en esta actualización.
 
 Validación: lint y build; seis pruebas de backend de reprogramación, concurrencia, disponibilidad, cancelación y zona horaria; tests/browser-time-grid.mjs en Chrome y WebKit, escritorio y móvil; tests/browser-calendar-clients.mjs en Chrome, escritorio y móvil. El test de Chrome móvil inyecta eventos táctiles de navegador mediante CDP, comprueba desplazamiento ordinario y arrastre. WebKit simula los eventos de arrastre y usa toques de Playwright; no sustituye un iPhone físico. Se verifican caída inválida, Escape, ocupación concurrente del destino, auditoría única, vistas y navegación. Todas las operaciones usan las bases locales de prueba, correo en archivo y pagos mock.
+
+## Web pública y tratamientos
+
+El inicio usa una composición en blanco, negro y rosa, sin carrusel ni tarjetas de tratamientos. `/tratamientos` consulta el catálogo activo de la agenda y `/tratamientos/:serviceId` muestra sus precios, duración y cuidados. `/catalogo` redirige al listado. El botón de cada ficha abre `/reservar?tratamiento=ID`; sin parámetro se conserva la categoría Limpieza. Los servicios eliminados o desactivados muestran una página de no disponible.
+
+Pruebas locales con la API aislada de `tests.serve_agenda_ui` y Vite:
+
+- `node tests/browser-public-redesign.mjs`: escritorio, móvil, ancho de 320 px, fichas, selección de tratamiento, errores y reintento. Usar `TEST_WEBKIT=1` y `PLAYWRIGHT_BROWSERS_PATH` local para WebKit.
+- `node tests/browser-public-checkout.mjs`: reserva desde una ficha, aceptación de cuidados, pago simulado, confirmación y cancelación desde administración. Requiere modo mock y usa datos ficticios.
+- `node tests/browser-calendar-clients.mjs`: regresión de administración.
+
+Este rediseño no requiere migración ni cambios en la configuración de producción.

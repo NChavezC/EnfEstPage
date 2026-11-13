@@ -1,9 +1,11 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { api, post, money, dateKey, clock } from "../features/agenda/api";
 import Modal from "../features/agenda/Modal";
 export default function Booking() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const requestedService = searchParams.get("tratamiento");
   const [catalog, setCatalog] = useState(null),
     [serviceId, setServiceId] = useState(""),
     [categoryId, setCategoryId] = useState(""),
@@ -23,7 +25,8 @@ export default function Booking() {
     [error, setError] = useState("");
   const service = catalog?.services.find((s) => s.id === Number(serviceId));
   useEffect(() => {
-    api("/catalog")
+    const controller = new AbortController();
+    api("/catalog", { signal: controller.signal })
       .then((data) => {
         const categories = data.categories || [];
         const findByName = (name) =>
@@ -38,10 +41,12 @@ export default function Booking() {
             c === cleaning ? { ...c, name: "Limpieza" } : c,
           ),
         });
-        setCategoryId(String((cleaning || categories[0])?.id ?? ""));
+        const selected = data.services.find(s => String(s.id) === requestedService);
+        setCategoryId(String(selected?.category_id ?? (cleaning || categories[0])?.id ?? ""));
+        setServiceId(selected ? String(selected.id) : "");
       })
       .catch((e) => setError(e.message));
-  }, []);
+  }, [requestedService]);
   useEffect(() => {
     setSlot("");
     setSlots([]);
