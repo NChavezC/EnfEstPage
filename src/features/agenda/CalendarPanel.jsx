@@ -1,36 +1,39 @@
 import { useEffect, useRef, useState } from "react";
 import { api, post, dateKey, clock, dateLabel, addDays, chileISO, labels, money } from "./api";
 import Modal from "./Modal";
+import CalendarTimeGrid from "./CalendarTimeGrid";
 import CustomerPicker, { CustomerFields } from "./CustomerPicker";
 import { customerPayload, emptyCustomer } from "./customerData";
 const button = "rounded-lg border border-[var(--color-border)] bg-white px-4 py-3 font-semibold disabled:opacity-50";
 export default function CalendarPanel() {
   const [anchor, setAnchor] = useState(dateKey());
+  const [view, setView] = useState(() => window.matchMedia("(max-width: 760px)").matches ? 1 : 7);
+  const [rules, setRules] = useState([]);
   const [bookings, setBookings] = useState([]), [services, setServices] = useState([]), [week, setWeek] = useState([]);
   const [error, setError] = useState(""), [message, setMessage] = useState(""), [updated, setUpdated] = useState(null);
   const [modal, setModal] = useState(null), [selected, setSelected] = useState(null), [busy, setBusy] = useState(false);
   const [day, setDay] = useState(dateKey()), [serviceId, setServiceId] = useState(""), [slots, setSlots] = useState([]), [slot, setSlot] = useState("");
   const [customer, setCustomer] = useState({...emptyCustomer}), [profile, setProfile] = useState(null), [notes, setNotes] = useState("");
   const [blockStart, setBlockStart] = useState("09:00"), [blockEnd, setBlockEnd] = useState("11:00"), [picked, setPicked] = useState(null);
-  const pendingSlot = useRef(null), touch = useRef(null), submitting = useRef(false), generation = useRef(0), suppressClick = useRef(false);
+  const pendingSlot = useRef(null), submitting = useRef(false), generation = useRef(0), dragging = useRef(false);
   const weekOffset = (new Date(anchor + "T12:00:00Z").getUTCDay() + 6) % 7;
-  const start = addDays(anchor, -weekOffset), end = addDays(start, 6);
-  const dates = Array.from({length: 7}, (_, i) => addDays(start, i));
+  const start = view === 7 ? addDays(anchor, -weekOffset) : anchor, end = addDays(start, view - 1);
+  const dates = Array.from({length: view}, (_, i) => addDays(start, i));
   const service = services.find(s => s.id === Number(serviceId));
   async function reload() {
     const token = ++generation.current;
-    const [rows, availability] = await Promise.all([api("/admin/bookings?start=" + start + "&end=" + end), api("/admin/availability/week?start=" + start + "&end=" + end)]);
+    const [rows, availability, schedule] = await Promise.all([api("/admin/bookings?start=" + start + "&end=" + end), api("/admin/availability/week?start=" + start + "&end=" + end), api("/admin/schedule")]);
     if (token !== generation.current) return;
-    setBookings(rows); setWeek(availability); setUpdated(new Date());
+    setBookings(rows); setWeek(availability); setRules(schedule); setUpdated(new Date());
   }
   useEffect(() => {
     let active = true;
     setBookings([]); setWeek([]); setUpdated(null);
     const refresh = () => {
-      if (submitting.current) return;
+      if (submitting.current || dragging.current) return;
       const token = ++generation.current;
-      Promise.all([api("/admin/bookings?start=" + start + "&end=" + end), api("/admin/availability/week?start=" + start + "&end=" + end)]).then(([rows, availability]) => {
-        if (active && token === generation.current) { setBookings(rows); setWeek(availability); setUpdated(new Date()); }
+      Promise.all([api("/admin/bookings?start=" + start + "&end=" + end), api("/admin/availability/week?start=" + start + "&end=" + end), api("/admin/schedule")]).then(([rows, availability, schedule]) => {
+        if (active && token === generation.current && !dragging.current) { setBookings(rows); setWeek(availability); setRules(schedule); setUpdated(new Date()); }
       }).catch(e => { if (active) setError("No se pudo actualizar la agenda: " + e.message); });
     };
     refresh(); const timer = setInterval(refresh, 15000); window.addEventListener("focus", refresh);
@@ -73,35 +76,22 @@ export default function CalendarPanel() {
   }
   function detail(b) { setSelected(b); setError(""); setModal("detail"); }
   return <section className="rounded-2xl border bg-[var(--color-surface)] p-3 sm:p-5 min-w-0">
-    <div className="flex flex-wrap gap-2 items-center justify-between">
-      <div className="flex gap-2"><button className={button} aria-label="Semana anterior" onClick={() => setAnchor(addDays(anchor,-7))}>←</button><button className={button} onClick={() => setAnchor(dateKey())}>Hoy</button><button className={button} aria-label="Semana siguiente" onClick={() => setAnchor(addDays(anchor,7))}>→</button></div>
+    <div className="calendar-controls flex flex-wrap gap-2 items-center justify-between">
+      <div className="flex gap-2"><button className={button} aria-label={view === 7 ? "Semana anterior" : "Período anterior"} disabled={busy} onClick={() => setAnchor(addDays(anchor,-view))}>←</button><button className={button} onClick={() => setAnchor(dateKey())}>Hoy</button><button className={button} aria-label={view === 7 ? "Semana siguiente" : "Período siguiente"} disabled={busy} onClick={() => setAnchor(addDays(anchor,view))}>→</button></div>
       <input type="date" required aria-label="Fecha de agenda" className="rounded-lg border p-3 min-w-0" value={anchor} onChange={e => { if(e.target.value) setAnchor(e.target.value); }} />
       <div className="flex gap-2 flex-wrap"><button className={button} disabled={!services.some(s => s.active)} onClick={() => openNew()}>Nueva reserva</button><button className={button} onClick={() => { setDay(anchor); setError(""); setModal("block"); }}>Bloquear horario</button></div>
     </div>
-    <h2 className="my-4 font-semibold" aria-live="polite">Semana del {start.split("-").reverse().join("/")} al {end.split("-").reverse().join("/")}</h2>
-    <p className="text-sm text-[var(--color-muted)] mb-3">America/Santiago · {updated ? "Actualizada a las " + clock(updated) : "Cargando…"}. Desliza horizontalmente para cambiar de semana.</p>
+    <div className="flex gap-2 flex-wrap mt-4" role="group" aria-label="Vista del calendario">{[[1,"Día"],[3,"3 días"],[7,"Semana"]].map(([count,label]) => <button key={count} className={button + (view === count ? " bg-pink-50 border-pink-500" : "")} aria-pressed={view === count} disabled={busy} onClick={() => setView(count)}>{label}</button>)}</div>
+    <h2 className="my-4 font-semibold" aria-live="polite">{view === 7 ? "Semana del " : view === 3 ? "Del " : "Día "}{start.split("-").reverse().join("/")}{view > 1 && " al " + end.split("-").reverse().join("/")}</h2>
+    <p className="text-sm text-[var(--color-muted)] mb-3">America/Santiago · {updated ? "Actualizada a las " + clock(updated) : "Cargando…"}. Desliza horizontalmente para cambiar de período.</p>
     {error && !modal && <p role="alert" className="my-3 rounded-lg bg-red-50 text-red-800 p-3">{error}</p>}
     {message && <p role="status" className="my-3 rounded-lg bg-green-50 p-3">{message}</p>}
-    <div data-testid="week-calendar" className="grid grid-cols-1 min-[380px]:grid-cols-2 lg:grid-cols-7 gap-2 mb-5" style={{touchAction:"pan-y"}}
-      onTouchStart={e => { if(e.touches.length === 1) { touch.current = {x:e.touches[0].clientX,y:e.touches[0].clientY}; suppressClick.current=false; } }}
-      onTouchCancel={() => { touch.current=null; }}
-      onTouchEnd={e => { if (!touch.current) return; const dx=e.changedTouches[0].clientX-touch.current.x, dy=e.changedTouches[0].clientY-touch.current.y; touch.current=null; if(Math.abs(dx)>60 && Math.abs(dx)>Math.abs(dy)*1.5) { suppressClick.current=true; setAnchor(a=>addDays(a,dx<0?7:-7)); } }}
-      onClickCapture={e => { if(suppressClick.current) { e.preventDefault(); e.stopPropagation(); suppressClick.current=false; } }}>
-      {dates.map(d => {
-        const available = week.find(w => w.day === d)?.slots || [];
-        const existing = bookings.filter(b => ["held","confirmed","blocked","payment_review"].includes(b.status) && dateKey(b.starts_at)<=d && dateKey(b.ends_at)>=d);
-        const entries = [...available.map(s => ({...s,available:true})),...existing].sort((a,b)=>new Date(a.starts_at)-new Date(b.starts_at));
-        return <div key={d} className={"rounded-xl border p-2 min-w-0 " + (d===dateKey()?"border-[var(--color-primary)]":"border-slate-200")}>
-          <h3 className="font-semibold text-sm py-2">{new Date(d+"T12:00:00Z").toLocaleDateString("es-CL",{weekday:"short",day:"numeric",month:"short",timeZone:"America/Santiago"})}</h3>
-          <div className="grid gap-2">{entries.map(item => <button key={item.id || item.starts_at} className={"rounded-lg border p-3 text-left text-xs min-h-[64px] break-words " + (item.available?"bg-green-50 border-green-300 text-green-900":item.status==="blocked"?"bg-slate-100 border-slate-300":item.status==="held"?"bg-amber-50 border-amber-400 border-dashed":"bg-[var(--color-surface-soft)] border-[var(--color-primary)]")}
-            onClick={() => { if(item.available) { setPicked(item); setError(""); setModal("slot"); } else detail(item); }}>
-            <strong className="block">{clock(item.starts_at)} – {clock(item.ends_at)}</strong>
-            {item.available ? <span>Disponible</span> : <><strong className="block mt-1">{item.status==="blocked"?"Bloqueo":item.customer.first_name+" "+item.customer.last_name}</strong><span className="block">{item.snapshot.name}</span><span>{labels[item.status]}</span></>}
-          </button>)}</div>
-          {!entries.length && <p className="text-xs text-slate-500 py-3">{updated ? "Sin disponibilidad" : "Cargando…"}</p>}
-        </div>;
-      })}
-    </div>
+    <CalendarTimeGrid key={start + "/" + view} dates={dates} bookings={bookings} availability={week} rules={rules} loading={!updated} busy={busy}
+      onNavigate={direction => setAnchor(a => addDays(a, direction * view))}
+      onDraggingChange={value => { dragging.current = value; }}
+      onError={setError} onDetail={detail}
+      onSlot={value => { setPicked(value); setError(""); setModal("slot"); }}
+      onMove={(booking, target) => perform(() => post("/admin/bookings/" + booking.id + "/move", { starts_at: target.starts_at, revision: booking.revision }))} />
     <details><summary>Historial del período ({bookings.length})</summary><div className="overflow-auto"><table className="w-full border-collapse text-[13px]"><thead><tr><th className="text-left p-3 border-b border-[var(--color-highlight)] align-top">Cita</th><th className="text-left p-3 border-b border-[var(--color-highlight)] align-top">Cliente</th><th className="text-left p-3 border-b border-[var(--color-highlight)] align-top">Estado</th><th className="text-left p-3 border-b border-[var(--color-highlight)] align-top"></th></tr></thead><tbody>{bookings.map(b => <tr key={b.id}><td className="text-left p-3 border-b border-[var(--color-highlight)] align-top">{dateLabel(b.starts_at)}</td><td className="text-left p-3 border-b border-[var(--color-highlight)] align-top">{b.customer.first_name || "Bloqueo"}</td><td className="text-left p-3 border-b border-[var(--color-highlight)] align-top">{labels[b.status]}</td><td className="text-left p-3 border-b border-[var(--color-highlight)] align-top"><button className="rounded-[10px] px-[17px] py-[11px] bg-[var(--color-surface)] text-[var(--color-primary-dark)] font-semibold border border-[var(--color-border)] cursor-pointer transition-colors hover:bg-[var(--color-background)] disabled:cursor-not-allowed disabled:opacity-50" onClick={() => {
                   setSelected(b);
 

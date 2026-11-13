@@ -20,6 +20,8 @@ for (const engine of engines) {
    const day=d.toISOString().slice(0,10);
    await page.getByLabel("Fecha de agenda").fill(day);
    const available=page.getByRole("button",{name:/Disponible/}); await available.first().waitFor();
+   if(mobile) await page.getByRole("button",{name:"Semana",exact:true}).click();
+   await available.first().waitFor();
    assert.equal(await page.locator('[data-testid="week-calendar"] h3').count(),7);
    assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
    await page.screenshot({path:'.agenda-local/calendar-'+(mobile?'iphone':'desktop')+'.png',fullPage:true});

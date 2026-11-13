@@ -105,7 +105,7 @@ El flujo local de reserva, reprogramación y cancelación con SMTP fue validado 
 
 
 ## Calendario semanal y clientas
-El calendario muestra siete días con disponibilidad calculada en el servidor. En móvil los días se distribuyen en tarjetas; deslizar horizontalmente cambia de semana. Las flechas y Hoy siguen disponibles. Tocar un horario permite reservarlo o bloquearlo, incluyendo el descanso previsto. El historial conserva las reservas canceladas y vencidas.
+El calendario representa las horas verticalmente y los días en columnas. Ofrece vistas de día, tres días y semana completa; inicia en día en celular y semana en escritorio. Deslizar horizontalmente cambia de período. Las flechas y Hoy siguen disponibles. Tocar un horario permite reservarlo o bloquearlo, incluyendo el descanso previsto. El historial conserva las reservas canceladas y vencidas.
 
 La pestaña Clientas permite buscar, crear y editar fichas. En una reserva interna el buscador rellena los datos; al confirmar se guardan ficha y reserva en una sola transacción. Editar una ficha no modifica los datos, precios ni cuidados históricos. Las modificaciones verifican la versión de la ficha. Las reservas públicas no pueden editar fichas existentes ni indicar su identificador privado.
 
@@ -124,3 +124,13 @@ Para repetir el recorrido: iniciar PostgreSQL local, ejecutar python -m tests.se
 40 casos de backend validados: 39 aprobados en la suite y el caso de correo multipart aprobado al repetirlo tras actualizar su lectura. Lint sin advertencias y compilación Vite aprobados. Recorrido completo de administración aprobado en Chrome y WebKit, en escritorio y viewport táctil 390 × 844, con navegador en Europe/London y agenda en America/Santiago. Los gestos se simulan; no se usó un iPhone físico.
 
 Migración 004 aplicada en enfest_agenda_test, enfest_agenda_ui_test y Neon de producción antes del push. En Neon se verificó la conservación de los JSON históricos de las 15 reservas existentes: 7 fichas creadas y 13 reservas vinculadas. La base local de desarrollo enfest no se migró en esta validación; el arranque habitual aplica las migraciones pendientes. Las pruebas usaron exclusivamente correos en archivo y pagos mock.
+
+
+## Calendario por horas y reprogramación por arrastre
+La duración determina la altura de cada cita. Los bloques verdes proceden de la disponibilidad real del backend; las pausas, descansos, bloqueos y horas fuera de jornada se distinguen visualmente. El encabezado de fechas permanece visible al recorrer las horas. Las reservas que se superponen visualmente (por ejemplo, un pago por revisar junto a una nueva reserva) se distribuyen en columnas dentro del día.
+
+Mantener pulsada una reserva confirmada durante aproximadamente medio segundo activa el arrastre. Se consultan los destinos válidos usando la duración guardada de esa reserva, también para tratamientos retirados. Soltar sobre un destino resaltado reprograma mediante el endpoint existente y su revisión; soltar fuera, Escape o una interrupción del gesto cancelan el movimiento. El borde superior o inferior desplaza las horas durante el arrastre. Para mover a otro día se puede usar la vista de tres días o semana; el formulario Reprogramar permite elegir otras fechas y sigue disponible para teclado.
+
+El backend vuelve a comprobar disponibilidad y revisión al guardar; una ocupación concurrente muestra un error y conserva la cita. Se mantienen precios, cuidados, pagos, auditoría y notificaciones. No hay migración de base de datos en esta actualización.
+
+Validación: lint y build; seis pruebas de backend de reprogramación, concurrencia, disponibilidad, cancelación y zona horaria; tests/browser-time-grid.mjs en Chrome y WebKit, escritorio y móvil; tests/browser-calendar-clients.mjs en Chrome, escritorio y móvil. El test de Chrome móvil inyecta eventos táctiles de navegador mediante CDP, comprueba desplazamiento ordinario y arrastre. WebKit simula los eventos de arrastre y usa toques de Playwright; no sustituye un iPhone físico. Se verifican caída inválida, Escape, ocupación concurrente del destino, auditoría única, vistas y navegación. Todas las operaciones usan las bases locales de prueba, correo en archivo y pagos mock.
