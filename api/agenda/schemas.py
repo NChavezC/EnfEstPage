@@ -44,6 +44,7 @@ class ScheduleChange(Strict):
 
 class CategoryChange(Strict):
     name: str = Field(min_length=2, max_length=100)
+    position: Optional[int] = Field(default=None, ge=1)
 
 class ServiceChange(Strict):
     category_id: int = Field(default=1, ge=1)

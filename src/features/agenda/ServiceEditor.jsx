@@ -17,6 +17,7 @@ const empty = {
 };
 export default function ServiceEditor() {
   const [services, setServices] = useState([]),
+    [catalogReady, setCatalogReady] = useState(false),
     [categories, setCategories] = useState([]),
     [category, setCategory] = useState(null),
     [filter, setFilter] = useState(""),
@@ -27,7 +28,7 @@ export default function ServiceEditor() {
     [error, setError] = useState(""),
     [message, setMessage] = useState(""),
     [busy, setBusy] = useState(false);
-  const load = () => Promise.all([api("/admin/services"), api("/admin/categories")]).then(([s, c]) => { setServices(s); setCategories(c); });
+  const load = () => Promise.all([api("/admin/services"), api("/admin/categories")]).then(([s, c]) => { setServices(s); setCategories(c); setCatalogReady(true); });
   useEffect(() => {
     load().catch(e => setError(e.message));
   }, []);
@@ -69,7 +70,7 @@ export default function ServiceEditor() {
     e.preventDefault(); setBusy(true); setError(""); setMessage("");
     try {
       await api("/admin/categories" + (category.id ? "/" + category.id : ""), {
-        method: category.id ? "PUT" : "POST", body: JSON.stringify({ name: category.name })
+        method: category.id ? "PUT" : "POST", body: JSON.stringify({ name: category.name, position: category.position })
       });
       await load(); setCategory(null); setMessage("Categoría guardada.");
     } catch (e) { setError(e.message); } finally { setBusy(false); }
@@ -96,7 +97,7 @@ export default function ServiceEditor() {
   const primary = button + " bg-[var(--color-primary)] text-white";
   const field = "rounded-[9px] border border-[var(--color-highlight)] bg-[var(--color-surface)] px-3 py-2";
   function startCategory(value) {
-    setError(""); setMessage(""); setCategory(value);
+    setError(""); setMessage(""); setCategory({ ...value, position: value.position ?? categories.length + 1 });
   }
   function confirmDelete(kind, item) {
     setError(""); setMessage(""); setDeletion({ kind, id: item.id, name: item.name });
@@ -113,7 +114,7 @@ export default function ServiceEditor() {
           {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
         </select>
       </label>
-      <button className={button} onClick={() => startCategory({ name: "" })}>Crear categoría</button>
+      <button className={button} disabled={!catalogReady} onClick={() => startCategory({ name: "" })}>Crear categoría</button>
       <button className={primary} disabled={!categories.length}
         onClick={() => edit({ ...empty, category_id: (selected || categories[0]).id }, "Crear tratamiento")}>Crear tratamiento</button>
     </div>
@@ -146,6 +147,12 @@ export default function ServiceEditor() {
           <input className={field} required minLength={2} maxLength={100} value={category.name}
             onChange={e => setCategory({ ...category, name: e.target.value })} />
         </label>
+        <label className="my-4 grid gap-2">Posición
+          <select aria-label="Posición" className={field} required value={category.position} onChange={e => setCategory({ ...category, position: Number(e.target.value) })}>
+            {Array.from({ length: categories.length + (category.id ? 0 : 1) }, (_, i) => <option key={i + 1} value={i + 1}>{i + 1}</option>)}
+          </select>
+        </label>
+        <p className="my-3 text-sm text-[var(--color-muted)]">Las demás categorías se desplazan automáticamente. Este orden se usa en la web y en los selectores.</p>
         {error && <p role="alert">{error}</p>}
         <button className={primary} disabled={busy}>Guardar categoría</button>
       </form>

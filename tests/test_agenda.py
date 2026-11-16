@@ -85,6 +85,58 @@ def payment(token):
 def event(p,result="completed"):
     return {"x_reference":p["reference"],"x_amount":str(p["amount"]),"x_result":result}
 
+def test_category_positions_insert_move_delete_and_validation():
+    login()
+    base = "/api/agenda/admin/categories"
+    first = client.get(base).json()[0]
+    a = client.post(base, json={"name": "Zeta", "position": 1}).json()
+    b = client.post(base, json={"name": "Alfa", "position": 2}).json()
+    rows = client.get(base).json()
+    assert [r["id"] for r in rows] == [a["id"], b["id"], first["id"]]
+    assert [r["position"] for r in rows] == [1, 2, 3]
+    assert client.put(base + f"/{first['id']}", json={"name": first["name"], "position": 1}).status_code == 200
+    assert client.put(base + f"/{a['id']}", json={"name": "Zeta renombrada"}).status_code == 200
+    assert client.get(base).json()[1]["id"] == a["id"]
+    for invalid in [0, 4]:
+        assert client.put(base + f"/{a['id']}", json={"name": "No guardar", "position": invalid}).status_code == 422
+    assert client.post(base, json={"name": "No crear", "position": 5}).status_code == 422
+    assert client.put(base + f"/{a['id']}", json={"name": first["name"], "position": 3}).status_code == 409
+    assert client.get(base).json()[1]["name"] == "Zeta renombrada"
+    assert client.delete(base + f"/{first['id']}").status_code == 409
+    assert client.delete(base + f"/{a['id']}").status_code == 200
+    rows = client.get(base).json()
+    assert [r["position"] for r in rows] == [1, 2]
+    with connection() as c:
+        c.execute("UPDATE agenda_services SET category_id=%s WHERE id=(SELECT max(id) FROM agenda_services)", (b["id"],))
+    assert client.put(base + f"/{b['id']}", json={"name": b["name"], "position": 1}).status_code == 200
+    assert [r["id"] for r in client.get("/api/agenda/catalog").json()["categories"]] == [b["id"], first["id"]]
+
+
+def test_category_position_migration_and_concurrent_moves():
+    from api.agenda.router import add_category, edit_category
+    from api.agenda.schemas import CategoryChange
+    booking = reserve()
+    add_category(CategoryChange(name="Zeta"))
+    add_category(CategoryChange(name="Alfa"))
+    with connection() as c:
+        snapshot = c.execute("SELECT snapshot FROM agenda_bookings WHERE id=%s", (booking["id"],)).fetchone()["snapshot"]
+        c.execute("DROP TRIGGER agenda_category_append_position ON agenda_categories")
+        c.execute("ALTER TABLE agenda_categories DROP COLUMN position")
+        c.execute("DELETE FROM agenda_migrations WHERE version='007_category_positions.sql'")
+    initialize()
+    initialize()
+    with connection() as c:
+        rows = c.execute("SELECT * FROM agenda_categories ORDER BY position").fetchall()
+        assert [r["name"] for r in rows] == ["Alfa", "Limpieza Facial", "Zeta"]
+        assert c.execute("SELECT snapshot FROM agenda_bookings WHERE id=%s", (booking["id"],)).fetchone()["snapshot"] == snapshot
+    def move(row):
+        edit_category(row["id"], CategoryChange(name=row["name"], position=1))
+    with ThreadPoolExecutor(max_workers=3) as pool:
+        list(pool.map(move, rows))
+    with connection() as c:
+        assert [r["position"] for r in c.execute("SELECT position FROM agenda_categories ORDER BY position")] == [1, 2, 3]
+
+
 def test_week_is_exact_and_saturday_preserved():
     with connection() as c:
         s=c.execute("SELECT * FROM agenda_services LIMIT 1").fetchone()

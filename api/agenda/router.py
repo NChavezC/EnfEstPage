@@ -17,6 +17,7 @@ from api.agenda.schedule import available, candidates, plan_for, ZONE
 from api.agenda.booking import create_booking,public_booking,service_by_id,checked_start,queue_notifications
 from api.agenda.payments import checkout,apply_event
 from api.agenda.customers import save_customer
+from api.agenda.categories import position_category
 
 router=APIRouter(prefix="/api/agenda")
 admin=APIRouter(prefix="/admin",dependencies=[Depends(require_admin)])
@@ -26,7 +27,7 @@ def catalog():
     with connection() as conn:
         services=conn.execute("""SELECT id,category_id,name,price,deposit,duration,description,images,care,version FROM agenda_services
           WHERE active AND deleted_at IS NULL ORDER BY id""").fetchall()
-        categories=conn.execute("SELECT id,name FROM agenda_categories WHERE id IN (SELECT category_id FROM agenda_services WHERE active AND deleted_at IS NULL) ORDER BY lower(name),id").fetchall()
+        categories=conn.execute("SELECT id,name,position FROM agenda_categories WHERE id IN (SELECT category_id FROM agenda_services WHERE active AND deleted_at IS NULL) ORDER BY position,id").fetchall()
     return {"categories":categories,"services":services,"payment_mode":config.agenda_payment_mode,"timezone":"America/Santiago"}
 
 @router.get("/availability")
@@ -107,13 +108,16 @@ def logout(request:Request,response:Response):
 @admin.get("/categories")
 def categories():
     with connection() as conn:
-        return conn.execute("SELECT id,name FROM agenda_categories ORDER BY lower(name),id").fetchall()
+        return conn.execute("SELECT id,name,position FROM agenda_categories ORDER BY position,id").fetchall()
 
 @admin.post("/categories",status_code=201)
 def add_category(body:CategoryChange):
     try:
         with connection() as conn:
+            lock_agenda(conn)
             row=conn.execute("INSERT INTO agenda_categories(name) VALUES(%s) RETURNING id,name",(body.name,)).fetchone()
+            position_category(conn,row["id"],body.position)
+            row=conn.execute("SELECT id,name,position FROM agenda_categories WHERE id=%s",(row["id"],)).fetchone()
             audit(conn,"category.created",row["id"])
         return row
     except UniqueViolation:
@@ -123,9 +127,12 @@ def add_category(body:CategoryChange):
 def edit_category(id:int,body:CategoryChange):
     try:
         with connection() as conn:
+            lock_agenda(conn)
             row=conn.execute("UPDATE agenda_categories SET name=%s WHERE id=%s RETURNING id,name",(body.name,id)).fetchone()
             if not row:
                 raise HTTPException(404,"Categoría no encontrada")
+            position_category(conn,id,body.position)
+            row=conn.execute("SELECT id,name,position FROM agenda_categories WHERE id=%s",(id,)).fetchone()
             audit(conn,"category.updated",id)
         return row
     except UniqueViolation:
@@ -139,9 +146,11 @@ def check_category(conn,id):
 def delete_category(id:int):
     try:
         with connection() as conn:
+            lock_agenda(conn)
             row=conn.execute("DELETE FROM agenda_categories WHERE id=%s RETURNING name",(id,)).fetchone()
             if not row:
                 raise HTTPException(404,"Categoría no encontrada")
+            position_category(conn)
             audit(conn,"category.deleted",id,row["name"])
         return {"ok":True}
     except ForeignKeyViolation:

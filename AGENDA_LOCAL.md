@@ -153,6 +153,14 @@ La migración `005_service_description.sql` agrega `description` con el texto in
 
 Validación: `pytest tests/test_agenda.py -q -k public_description` y `node tests/browser-service-description.mjs` (también WebKit con las variables descritas arriba). Prueban migración sobre datos anteriores, conservación de reservas, edición persistente, copia, validación de longitud y separación del modal de cuidados.
 
+## Orden de categorías
+
+Crear/editar categoría incluye Posición. Al crear se ofrecen 1 a N+1 y se propone el final; al editar, 1 a N. Mover una categoría desplaza las demás, y eliminar una categoría vacía compacta las posiciones. Las escrituras comparten el bloqueo transaccional de agenda y una restricción única diferida evita posiciones duplicadas.
+
+La migración 007 conserva inicialmente el orden alfabético anterior. Aplicarla antes del despliegue del código. La web, el dropdown de reservas y los selectores administrativos usan el orden guardado. Las categorías sin tratamientos activos siguen ocultas en la web. Limpieza continúa siendo la selección inicial al reservar, independientemente de su posición. Los títulos públicos de categoría se muestran en mayúsculas mediante CSS, con el mismo tamaño que los tratamientos, sin cambiar el nombre guardado.
+
+Validación: `pytest tests/test_agenda.py -q -k 'category_position or categories_migrate or categories_migration or delete_catalog'` y `node tests/browser-category-order.mjs` con la API local aislada. Para WebKit, usar TEST_WEBKIT=1 y PLAYWRIGHT_BROWSERS_PATH como en las pruebas anteriores.
+
 ## Contenido del catálogo y fotos
 
 Las 16 fichas del PDF se relacionan por nombre con 29 tratamientos en api/agenda/catalog_content.json. Se extrajeron 39 imágenes en public/tratamientos; las comparativas de abdomen conservan juntas las dos fotos del mismo caso. La importación no modifica precios, duración, cuidados, plantillas de correo ni snapshots de reservas.
