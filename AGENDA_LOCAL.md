@@ -137,7 +137,7 @@ Validación: lint y build; seis pruebas de backend de reprogramación, concurren
 
 ## Web pública y tratamientos
 
-El inicio usa una composición en blanco, negro y rosa, sin carrusel ni tarjetas de tratamientos. `/tratamientos` consulta el catálogo activo de la agenda y `/tratamientos/:serviceId` muestra sus precios, duración y cuidados. `/catalogo` redirige al listado. El botón de cada ficha abre `/reservar?tratamiento=ID`; sin parámetro se conserva la categoría Limpieza. Los servicios eliminados o desactivados muestran una página de no disponible.
+El inicio usa una composición en blanco, negro y rosa, sin carrusel ni tarjetas de tratamientos. `/tratamientos` consulta el catálogo activo de la agenda y `/tratamientos/:serviceId` muestra sus precios, duración y cuidados. `/catalogo` redirige al listado. El botón de cada ficha abre `/reservar?tratamiento=ID`; sin parámetro se selecciona la primera categoría disponible según el orden del admin. Los servicios eliminados o desactivados muestran una página de no disponible.
 
 Pruebas locales con la API aislada de `tests.serve_agenda_ui` y Vite:
 
@@ -157,7 +157,7 @@ Validación: `pytest tests/test_agenda.py -q -k public_description` y `node test
 
 Crear/editar categoría incluye Posición. Al crear se ofrecen 1 a N+1 y se propone el final; al editar, 1 a N. Mover una categoría desplaza las demás, y eliminar una categoría vacía compacta las posiciones. Las escrituras comparten el bloqueo transaccional de agenda y una restricción única diferida evita posiciones duplicadas.
 
-La migración 007 conserva inicialmente el orden alfabético anterior. Aplicarla antes del despliegue del código. La web, el dropdown de reservas y los selectores administrativos usan el orden guardado. Las categorías sin tratamientos activos siguen ocultas en la web. Limpieza continúa siendo la selección inicial al reservar, independientemente de su posición. Los títulos públicos de categoría se muestran en mayúsculas mediante CSS, con el mismo tamaño que los tratamientos, sin cambiar el nombre guardado.
+La migración 007 conserva inicialmente el orden alfabético anterior. Aplicarla antes del despliegue del código. La web, el dropdown de reservas y los selectores administrativos usan el orden guardado. Las categorías sin tratamientos activos siguen ocultas en la web. Al reservar se preselecciona la primera categoría disponible según ese orden; los enlaces a un tratamiento conservan la categoría de ese tratamiento. Los títulos públicos de categoría se muestran en mayúsculas mediante CSS, con el mismo tamaño que los tratamientos, sin cambiar el nombre guardado.
 
 Validación: `pytest tests/test_agenda.py -q -k 'category_position or categories_migrate or categories_migration or delete_catalog'` y `node tests/browser-category-order.mjs` con la API local aislada. Para WebKit, usar TEST_WEBKIT=1 y PLAYWRIGHT_BROWSERS_PATH como en las pruebas anteriores.
 

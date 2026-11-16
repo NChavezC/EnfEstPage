@@ -42,7 +42,7 @@ export default function Booking() {
           ),
         });
         const selected = data.services.find(s => String(s.id) === requestedService);
-        setCategoryId(String(selected?.category_id ?? (cleaning || categories[0])?.id ?? ""));
+        setCategoryId(String(selected?.category_id ?? categories[0]?.id ?? ""));
         setServiceId(selected ? String(selected.id) : "");
       })
       .catch((e) => setError(e.message));

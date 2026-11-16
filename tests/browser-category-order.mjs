@@ -44,8 +44,7 @@ try {
       await page.goto(base + "/reservar");
       await page.getByLabel("Categoría", { exact: true }).locator("option").first().waitFor({ state: "attached" });
       assert.equal(await page.getByLabel("Categoría", { exact: true }).locator("option").first().getAttribute("value"), String(categoryId));
-      const cleaning = original.find(c => ["limpieza", "limpieza facial", "limpiezas faciales"].includes(c.name.toLowerCase()));
-      assert.equal(await page.getByLabel("Categoría", { exact: true }).inputValue(), String(cleaning.id));
+      assert.equal(await page.getByLabel("Categoría", { exact: true }).inputValue(), String(categoryId));
       await page.goto(base + "/admin");
       await page.getByRole("button", { name: "Tratamientos y cuidados", exact: true }).click();
       await page.getByLabel("Filtrar por categoría").selectOption(String(categoryId));
@@ -59,7 +58,11 @@ try {
       await page.goto(base + "/reservar");
       await page.getByLabel("Categoría", { exact: true }).locator("option").first().waitFor({ state: "attached" });
       assert.equal(await page.getByLabel("Categoría", { exact: true }).locator("option").last().getAttribute("value"), String(categoryId));
-      console.log(engine.name(), mobile ? "mobile" : "desktop", "PASS: create/move category, both public orders, Limpieza default, uppercase and matching font size");
+      assert.equal(await page.getByLabel("Categoría", { exact: true }).inputValue(), await page.getByLabel("Categoría", { exact: true }).locator("option").first().getAttribute("value"));
+      await page.goto(base + "/reservar?tratamiento=" + serviceId);
+      await page.getByLabel("Categoría", { exact: true }).locator("option").first().waitFor({ state: "attached" });
+      assert.equal(await page.getByLabel("Categoría", { exact: true }).inputValue(), String(categoryId));
+      console.log(engine.name(), mobile ? "mobile" : "desktop", "PASS: create/move category, both public orders, first category default, uppercase and matching font size");
     } finally {
       if (serviceId) await api("/admin/services/" + serviceId, "DELETE");
       if (categoryId) await api("/admin/categories/" + categoryId, "DELETE");

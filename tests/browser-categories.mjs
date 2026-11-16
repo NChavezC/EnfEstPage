@@ -1,9 +1,8 @@
-import { chromium } from "../.agenda-local/ui/node_modules/playwright/index.mjs";
+import { chromium, webkit } from "../.agenda-local/ui/node_modules/playwright/index.mjs";
 import assert from "node:assert/strict";
-const browser = await chromium.launch({
-  executablePath: "C:/Program Files/Google/Chrome/Application/chrome.exe",
-  headless: true,
-});
+const base = process.env.TEST_BASE_URL || "http://127.0.0.1:5173";
+const engine = process.env.TEST_WEBKIT ? webkit : chromium;
+const browser = await engine.launch(engine === chromium ? { executablePath: "C:/Program Files/Google/Chrome/Application/chrome.exe", headless: true } : { headless: true });
 const categories = [
   { id: 2, name: "Corporal" },
   { id: 1, name: "Limpieza Facial" },
@@ -79,19 +78,14 @@ try {
         return route.abort();
       return route.continue();
     });
-    await page.goto("http://localhost:5173/reservar");
-    await page.getByRole("button", { name: /Limpieza de prueba/ }).waitFor();
-    assert.equal(
-      await page
-        .getByLabel("Categoría", { exact: true })
-        .locator("option:checked")
-        .innerText(),
-      "Limpieza",
-    );
-    assert.equal(
-      await page.getByRole("button", { name: /Corporal de prueba/ }).count(),
-      0,
-    );
+    await page.goto(base + "/reservar?tratamiento=1");
+    await page.getByLabel("Categoría", { exact: true }).locator("option").first().waitFor({ state: "attached" });
+    assert.equal(await page.getByLabel("Categoría", { exact: true }).inputValue(), "1");
+    await page.goto(base + "/reservar");
+    await page.getByRole("button", { name: /Corporal de prueba/ }).waitFor();
+    assert.equal(await page.getByLabel("Categoría", { exact: true }).inputValue(), "2");
+    assert.equal(await page.getByRole("button", { name: /Limpieza de prueba/ }).count(), 0);
+    await page.getByLabel("Categoría", { exact: true }).selectOption("1");
     await page.getByRole("button", { name: /Limpieza de prueba/ }).click();
     await page.getByLabel("Categoría", { exact: true }).selectOption("2");
     await page.getByRole("button", { name: /Corporal de prueba/ }).waitFor();
@@ -107,7 +101,7 @@ try {
         () => document.documentElement.scrollWidth <= innerWidth,
       ),
     );
-    await page.goto("http://localhost:5173/admin");
+    await page.goto(base + "/admin");
     await page.getByRole("button", { name: "Tratamientos y cuidados" }).click();
     const filter = page.getByLabel("Filtrar por categoría");
     await filter.selectOption("1");
