@@ -21,6 +21,7 @@ export default function Booking() {
   });
   const [modal, setModal] = useState(false),
     [accepted, setAccepted] = useState(false),
+    [whatsappConsent, setWhatsappConsent] = useState(false),
     [busy, setBusy] = useState(false),
     [error, setError] = useState("");
   const service = catalog?.services.find((s) => s.id === Number(serviceId));
@@ -80,6 +81,7 @@ export default function Booking() {
         starts_at: slot,
         customer,
         accepted_care: true,
+        whatsapp_consent: whatsappConsent,
       });
       sessionStorage.setItem("agenda_last_token", b.token);
       // Persist access before starting checkout, so an uncertain provider result is recoverable.
@@ -129,6 +131,7 @@ export default function Booking() {
           onSubmit={(e) => {
             e.preventDefault();
             setAccepted(false);
+            setWhatsappConsent(false);
             setModal(true);
           }}
         >
@@ -334,6 +337,13 @@ export default function Booking() {
             />
             He leído y acepto los cuidados previos de este tratamiento.
           </label>
+          <label className="flex gap-2.5 text-sm mt-4 mb-3 items-start">
+            <input type="checkbox" checked={whatsappConsent} disabled={busy}
+              onChange={(e) => setWhatsappConsent(e.target.checked)}
+              className="w-[18px] h-[18px] shrink-0 mt-1 accent-[var(--color-primary)]" />
+            <span>Quiero recibir por WhatsApp la confirmación, los recordatorios y los cuidados previos de mi reserva de Enfermera Estética. Puedo dejar de recibirlos cuando quiera.</span>
+          </label>
+          <p className="text-sm text-[var(--color-muted)]">Opcional. Puedes reservar sin marcar esta casilla y recibir tus correos. Los avisos por WhatsApp estarán disponibles cuando se habilite el servicio.</p>
           <p className="mt-3 mb-3 leading-[1.6]">
             Al continuar retendremos tu horario temporalmente. Abono:{" "}
             <strong>{money(service.deposit)}</strong>.

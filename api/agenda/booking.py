@@ -1,5 +1,5 @@
 import secrets
-from datetime import timedelta, timezone
+from datetime import datetime, timedelta, timezone
 from uuid import uuid4
 from fastapi import HTTPException
 from psycopg.types.json import Jsonb
@@ -49,6 +49,14 @@ def create_booking(body,manual=False):
             raise HTTPException(409,"El horario ya no está disponible")
         cfg=conn.execute("SELECT * FROM agenda_settings WHERE id=1").fetchone()
         snapshot=dict(service,professional=cfg["professional"])
+        snapshot["whatsapp_consent"] = {
+            "accepted": body.whatsapp_consent if not manual else False,
+            "phone": body.customer.phone,
+            "recorded_at": datetime.now(timezone.utc).isoformat(),
+            "version": "2026-11-23",
+            "text": "Quiero recibir por WhatsApp la confirmación, los recordatorios y los cuidados previos de mi reserva de Enfermera Estética. Puedo dejar de recibirlos cuando quiera.",
+            "source": "web" if not manual else "admin_no_consent",
+        }
         row=conn.execute("""INSERT INTO agenda_bookings(id,token_hash,service_id,starts_at,ends_at,occupied_until,
           status,expires_at,customer,snapshot,accepted_at,source,notes)
           VALUES(%s,%s,%s,%s,%s,%s,%s,CASE WHEN %s THEN NULL ELSE clock_timestamp()+%s*interval '1 minute' END,

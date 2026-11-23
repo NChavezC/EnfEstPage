@@ -92,6 +92,7 @@ class BookingRequest(Strict):
     starts_at: datetime
     customer: PaymentRequest
     accepted_care: bool = False
+    whatsapp_consent: bool = Field(default=False, strict=True)
     notes: str = Field(default="", max_length=5000)
 
 class CustomerChange(PaymentRequest):
