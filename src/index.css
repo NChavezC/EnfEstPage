@@ -190,3 +190,5 @@
 .treatment-gallery{grid-template-columns:repeat(2,minmax(0,1fr));margin-top:30px}.treatment-gallery img{height:320px}.treatment-gallery figure:only-child{grid-column:1/-1}.treatment-gallery figure:only-child img{height:auto;max-height:500px}@media(max-width:480px){.treatment-gallery{gap:12px}.treatment-gallery img{height:230px}}
 
 .treatment-category-label{font-family:inherit;font-size:22px;font-weight:500;text-transform:capitalize}
+
+.treatment-detail-grid > div > .treatment-gallery:first-child{margin-top:0}
