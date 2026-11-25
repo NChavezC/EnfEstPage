@@ -166,7 +166,7 @@ def test_database_rejects_partial_overlap():
     with pytest.raises(psycopg.errors.ExclusionViolation):
         with connection() as c:
             c.execute("""INSERT INTO agenda_bookings(id,token_hash,starts_at,ends_at,occupied_until,status,customer,snapshot,source)
-              SELECT gen_random_uuid(),'different-token',starts_at+interval '30 minutes',ends_at,occupied_until,'blocked','{}','{}','test'
+              SELECT gen_random_uuid(),'different-token',starts_at+interval '30 minutes',ends_at,occupied_until,'confirmed','{}','{}','test'
               FROM agenda_bookings WHERE id=%s""",(b["id"],))
 
 def test_callbacks_idempotent_and_monotonic():
@@ -800,3 +800,68 @@ def test_service_images_validation_copy_and_legacy_save():
     payload["images"] = []
     assert client.put(f"/api/agenda/admin/services/{service['id']}", json=payload).status_code == 200
     assert client.get("/api/agenda/catalog").json()["services"][0]["images"] == []
+
+
+def test_admin_free_booking_ignores_schedule_blocks_and_buffer():
+    login()
+    body=request_body()
+    # Sunday is closed; a manual block must remain intact after overriding it.
+    day=future_monday()+timedelta(days=6)
+    start=local_instant(day,"02:17")
+    body["starts_at"]=start.isoformat()
+    blocked=client.post("/api/agenda/admin/blocks",json={"starts_at":start.isoformat(),"ends_at":(start+timedelta(hours=6)).isoformat()})
+    assert blocked.status_code==201,blocked.text
+    assert client.post("/api/agenda/bookings",json=body).status_code==409
+    result=client.post("/api/agenda/admin/bookings",json=body)
+    assert result.status_code==201,result.text
+    id=result.json()["id"]
+    assert client.post("/api/agenda/admin/bookings",json=body).status_code==409
+    with connection() as c:
+        row=c.execute("SELECT * FROM agenda_bookings WHERE id=%s",(id,)).fetchone()
+        assert row["occupied_until"]==row["ends_at"]
+        assert c.execute("SELECT status FROM agenda_bookings WHERE id=%s",(blocked.json()["id"],)).fetchone()["status"]=="blocked"
+        assert c.execute("SELECT count(*) AS n FROM agenda_jobs WHERE booking_id=%s",(id,)).fetchone()["n"]>=1
+    # Adjacent appointments are allowed, even when an existing public buffer exists.
+    with connection() as c:
+        c.execute("UPDATE agenda_bookings SET occupied_until=ends_at+interval '10 minutes' WHERE id=%s",(id,))
+    body["starts_at"]=row["ends_at"].isoformat()
+    assert client.post("/api/agenda/admin/bookings",json=body).status_code==201
+    moved=start-timedelta(days=400)
+    response=client.post(f"/api/agenda/admin/bookings/{id}/move",json={"starts_at":moved.isoformat(),"revision":1})
+    assert response.status_code==200,response.text
+    assert client.post(f"/api/agenda/admin/bookings/{id}/move",json={"starts_at":start.isoformat(),"revision":1}).status_code==409
+    with connection() as c:
+        assert c.execute("SELECT snapshot,customer FROM agenda_bookings WHERE id=%s",(id,)).fetchone()=={"snapshot":row["snapshot"],"customer":row["customer"]}
+
+
+def test_admin_arbitrary_hour_concurrent_claim_and_public_hold():
+    body=request_body()
+    body["starts_at"]=local_instant(future_monday(),"23:47").isoformat()
+    def claim(_):
+        from fastapi import HTTPException
+        from api.agenda.schemas import AdminBookingRequest
+        try:
+            create_booking(AdminBookingRequest(**body),manual=True)
+            return 201
+        except HTTPException as e:
+            return e.status_code
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        assert sorted(pool.map(claim,range(2)))==[201,409]
+    held=reserve()
+    login()
+    with connection() as c:
+        b=c.execute("SELECT starts_at FROM agenda_bookings WHERE id=%s",(held["id"],)).fetchone()
+    body["starts_at"]=b["starts_at"].isoformat()
+    assert client.post("/api/agenda/admin/bookings",json=body).status_code==409
+
+
+def test_admin_migration_preserves_existing_rows():
+    from pathlib import Path
+    reserve()
+    with connection() as c:
+        # Reconstruct the old constraint on compatible historical data.
+        c.execute("ALTER TABLE agenda_bookings DROP CONSTRAINT agenda_no_overlap")
+        c.execute("ALTER TABLE agenda_bookings ADD CONSTRAINT agenda_no_overlap EXCLUDE USING gist (tstzrange(starts_at,occupied_until,'[)') WITH &&) WHERE(status IN ('held','confirmed','blocked'))")
+        before=c.execute("SELECT * FROM agenda_bookings ORDER BY id").fetchall()
+        c.execute(Path("api/agenda/migrations/008_admin_free_booking.sql").read_text(encoding="utf-8"))
+        assert before==c.execute("SELECT * FROM agenda_bookings ORDER BY id").fetchall()

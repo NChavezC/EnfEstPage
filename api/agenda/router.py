@@ -14,7 +14,7 @@ from api.agenda.security import require_admin,same_origin,digest,rate_limit
 from api.agenda.setup import hash_password
 from api.agenda.schemas import (CategoryChange,BookingRequest,AdminBookingRequest,CustomerChange,CustomerUpdate,ScheduleChange,ServiceChange,MoveRequest,CancelRequest,BlockRequest,LoginRequest,SettingsChange)
 from api.agenda.schedule import available, candidates, plan_for, ZONE
-from api.agenda.booking import create_booking,public_booking,service_by_id,checked_start,queue_notifications
+from api.agenda.booking import create_booking,public_booking,service_by_id,checked_start,queue_notifications,manual_slot
 from api.agenda.payments import checkout,apply_event
 from api.agenda.customers import save_customer
 from api.agenda.categories import position_category
@@ -382,10 +382,7 @@ def move(id:UUID,body:MoveRequest):
         b=conn.execute("SELECT * FROM agenda_bookings WHERE id=%s FOR UPDATE",(id,)).fetchone()
         if not b or b["status"]!="confirmed" or b["revision"]!=body.revision:
             raise HTTPException(409,"La reserva cambió o no está confirmada")
-        slots=available(conn,start.astimezone(ZONE).date(),b["snapshot"],public=False,exclude=id)
-        slot=next((s for s in slots if s["starts_at"]==start),None)
-        if not slot:
-            raise HTTPException(409,"Horario no disponible")
+        slot=manual_slot(conn,start,b["snapshot"],exclude=id)
         b=conn.execute("""UPDATE agenda_bookings SET starts_at=%s,ends_at=%s,occupied_until=%s,
           revision=revision+1 WHERE id=%s RETURNING *""",
           (slot["starts_at"],slot["ends_at"],slot["occupied_until"],id)).fetchone()

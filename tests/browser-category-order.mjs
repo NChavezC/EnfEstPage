@@ -36,9 +36,9 @@ try {
       serviceId = (await api("/admin/services", "POST", { ...body, category_id: categoryId, name: "Tratamiento de orden" })).id;
       await page.goto(base + "/tratamientos");
       await page.locator(".treatment-category h2").first().waitFor();
-      assert.equal(await page.locator(".treatment-category h2").first().innerText(), name.toUpperCase());
+      assert.equal(await page.locator(".treatment-category h2").first().textContent(), name);
       const style = await page.evaluate(() => ({ category: getComputedStyle(document.querySelector(".treatment-category h2")).fontSize, treatment: getComputedStyle(document.querySelector(".treatment-row h3")).fontSize, transform: getComputedStyle(document.querySelector(".treatment-category h2")).textTransform }));
-      assert.equal(style.category, style.treatment); assert.equal(style.transform, "uppercase");
+      assert.ok(parseFloat(style.category) > parseFloat(style.treatment)); assert.equal(style.transform, "capitalize");
       assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
       await page.screenshot({ path: ".agenda-local/category-order-" + engine.name() + (mobile ? "-mobile" : "-desktop") + ".png", fullPage: true });
       await page.goto(base + "/reservar");
@@ -54,7 +54,7 @@ try {
       await dialog.waitFor({ state: "hidden" });
       await page.goto(base + "/tratamientos");
       await page.locator(".treatment-category h2").filter({ hasText: name }).waitFor();
-      assert.equal(await page.locator(".treatment-category h2").last().innerText(), name.toUpperCase());
+      assert.equal(await page.locator(".treatment-category h2").last().textContent(), name);
       await page.goto(base + "/reservar");
       await page.getByLabel("Categoría", { exact: true }).locator("option").first().waitFor({ state: "attached" });
       assert.equal(await page.getByLabel("Categoría", { exact: true }).locator("option").last().getAttribute("value"), String(categoryId));
@@ -62,7 +62,7 @@ try {
       await page.goto(base + "/reservar?tratamiento=" + serviceId);
       await page.getByLabel("Categoría", { exact: true }).locator("option").first().waitFor({ state: "attached" });
       assert.equal(await page.getByLabel("Categoría", { exact: true }).inputValue(), String(categoryId));
-      console.log(engine.name(), mobile ? "mobile" : "desktop", "PASS: create/move category, both public orders, first category default, uppercase and matching font size");
+      console.log(engine.name(), mobile ? "mobile" : "desktop", "PASS: create/move category, both public orders, first category default, capitalized and larger category headings");
     } finally {
       if (serviceId) await api("/admin/services/" + serviceId, "DELETE");
       if (categoryId) await api("/admin/categories/" + categoryId, "DELETE");

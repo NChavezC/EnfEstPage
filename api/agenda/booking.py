@@ -20,6 +20,17 @@ def checked_start(value):
         raise HTTPException(422,"La fecha debe incluir zona horaria")
     return value.astimezone(timezone.utc)
 
+def manual_slot(conn,start,service,exclude=None):
+    """Called under the agenda lock; only actual active appointments conflict."""
+    end=start+timedelta(minutes=service["duration"])
+    conflict=conn.execute("""SELECT id FROM agenda_bookings
+      WHERE status IN ('held','confirmed') AND (status<>'held' OR expires_at>clock_timestamp())
+      AND starts_at<%s AND ends_at>%s AND (%s::uuid IS NULL OR id<>%s::uuid)
+      LIMIT 1""",(end,start,exclude,exclude)).fetchone()
+    if conflict:
+        raise HTTPException(409,"El horario se superpone con otra reserva activa. Elige otra hora.")
+    return {"starts_at":start,"ends_at":end,"occupied_until":end}
+
 def queue_notifications(conn,booking,kind="confirmation"):
     conn.execute("UPDATE agenda_jobs SET status='cancelled' WHERE booking_id=%s AND status='queued'",(booking["id"],))
     conn.execute("""INSERT INTO agenda_jobs(booking_id,revision,kind,due_at) VALUES(%s,%s,%s,now())
@@ -43,8 +54,11 @@ def create_booking(body,manual=False):
             raise HTTPException(409,"Cambió el tratamiento. Recarga y revisa los cuidados y precios.")
         if not manual and not body.accepted_care:
             raise HTTPException(422,"Debes aceptar los cuidados previos")
-        slots=available(conn,start.astimezone(ZONE).date(),service,public=not manual)
-        slot=next((s for s in slots if s["starts_at"]==start),None)
+        if manual:
+            slot=manual_slot(conn,start,service)
+        else:
+            slots=available(conn,start.astimezone(ZONE).date(),service)
+            slot=next((s for s in slots if s["starts_at"]==start),None)
         if not slot:
             raise HTTPException(409,"El horario ya no está disponible")
         cfg=conn.execute("SELECT * FROM agenda_settings WHERE id=1").fetchone()

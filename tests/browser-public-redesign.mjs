@@ -23,7 +23,7 @@ try {
   for(const service of catalog.services){
    await page.goto(base+"/tratamientos/"+service.id);
    await page.getByRole("heading",{name:service.name,exact:true}).waitFor();
-   assert.equal(await page.locator(".care-text").innerText(),service.care || "Consulta con nosotros las indicaciones antes de tu visita.");
+   assert.equal(await page.locator(".care-text").innerText(),service.care || "Consulta conmigo las indicaciones antes de tu visita.");
    assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
   }
   const service=catalog.services[0];

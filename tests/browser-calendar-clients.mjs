@@ -46,7 +46,7 @@ for (const engine of engines) {
    await dialog.waitFor({state:"hidden"});
    await page.getByRole("button",{name:new RegExp(name)}).click();
    await page.getByRole("button",{name:"Reprogramar",exact:true}).click();
-   await page.getByLabel("Hora disponible").selectOption({index:2});
+   await page.getByLabel("Hora",{exact:true}).fill("14:10");
    await page.getByRole("button",{name:"Confirmar nueva hora",exact:true}).click();
    await dialog.waitFor({state:"hidden"});
    await page.getByRole("button",{name:new RegExp(name)}).click();

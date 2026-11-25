@@ -1,22 +1,18 @@
 import { useEffect, useRef, useState } from "react";
-import { api, clock, dateKey, dateLabel, labels } from "./api";
+import { chileISO, clock, dateKey, dateLabel, labels } from "./api";
 import { minute, instantMinute, dayPlan, segment, layoutEntries } from "./calendarGeometry";
 import "./calendar.css";
 
 const SCALE = 1.25;
 const HOLD_MS = 450;
-export default function CalendarTimeGrid({ dates, bookings, availability, rules, loading, busy, onNavigate, onSlot, onDetail, onMove, onError, onDraggingChange }) {
+export default function CalendarTimeGrid({ dates, bookings, availability, rules, duration, loading, busy, onNavigate, onSlot, onDetail, onMove, onDraggingChange }) {
   const viewport = useRef(null), session = useRef(null), swipe = useRef(null), suppressUntil = useRef(0);
   const handlers = useRef({}), frame = useRef(null), mounted = useRef(false), positioned = useRef(false);
   const [drag, setDrag] = useState(null), [announcement, setAnnouncement] = useState("");
   const [now, setNow] = useState(new Date());
   const plans = dates.map(d => dayPlan(rules, d));
   const visible = bookings.filter(b => ["held", "confirmed", "blocked", "payment_review"].includes(b.status));
-  const overnight = visible.some(b => dateKey(b.starts_at) !== dateKey(b.ends_at));
-  const from = Math.floor(Math.min(overnight ? 0 : 420, ...plans.filter(p => !p.closed).map(p => minute(p.shift_start)),
-    ...visible.filter(b => dates.includes(dateKey(b.starts_at))).map(b => instantMinute(b.starts_at))) / 60) * 60;
-  const to = Math.ceil(Math.max(overnight ? 1440 : 1260, ...plans.filter(p => !p.closed).map(p => minute(p.shift_end)),
-    ...visible.filter(b => dates.includes(dateKey(b.ends_at))).map(b => instantMinute(b.ends_at))) / 60) * 60;
+  const from = 0, to = 1440;
   useEffect(() => { if (!busy) setAnnouncement(text => text === "Guardando nueva hora…" ? "" : text); }, [busy]);
   useEffect(() => {
     if (loading || positioned.current || !viewport.current) return;
@@ -26,6 +22,18 @@ export default function CalendarTimeGrid({ dates, bookings, availability, rules,
   }, [loading, plans, visible, dates, from]);
   const height = (to - from) * SCALE;
   const pos = (a, b) => ({ top: (a - from) * SCALE, height: Math.max(1, (b - a) * SCALE) });
+  function timeAt(day, point, length = duration) {
+    const value = Math.max(0, Math.min(1435, Math.floor(point / 5) * 5));
+    const time = String(Math.floor(value / 60)).padStart(2, "0") + ":" + String(value % 60).padStart(2, "0");
+    const starts_at = chileISO(day + "T" + time + ":00");
+    const ends_at = new Date(new Date(starts_at).getTime() + length * 60000).toISOString();
+    return { starts_at, ends_at, occupied_until: ends_at };
+  }
+  function pickTime(e, day, fallback) {
+    const column = e.currentTarget.closest("[data-calendar-day]");
+    const point = e.detail === 0 ? fallback : (e.clientY - column.getBoundingClientRect().top) / SCALE;
+    onSlot(timeAt(day, point));
+  }
   function stop(render = true) {
     const current = session.current;
     if (current) clearTimeout(current.timer);
@@ -42,8 +50,10 @@ export default function CalendarTimeGrid({ dates, bookings, availability, rules,
     });
     if (!column) return null;
     const r = column.getBoundingClientRect(), point = from + (y - r.top) / SCALE;
-    return session.current?.targets.find(t => dateKey(t.starts_at) === column.dataset.calendarDay &&
-      point >= instantMinute(t.starts_at) && point < instantMinute(t.ends_at)) || null;
+    const target = timeAt(column.dataset.calendarDay, point, session.current.booking.snapshot.duration);
+    const conflict = visible.some(b => b.id !== session.current.booking.id && ["held", "confirmed"].includes(b.status) &&
+      new Date(b.starts_at) < new Date(target.ends_at) && new Date(b.ends_at) > new Date(target.starts_at));
+    return conflict ? null : target;
   }
   function updateTarget(x, y) {
     const current = session.current;
@@ -54,7 +64,7 @@ export default function CalendarTimeGrid({ dates, bookings, availability, rules,
     current.target = target;
     setDrag({ ...current });
     if (changed) {
-      setAnnouncement(target ? "Soltar para reprogramar: " + dateLabel(target.starts_at) : "Suelta en uno de los horarios resaltados.");
+      setAnnouncement(target ? "Soltar para reprogramar: " + dateLabel(target.starts_at) : "Suelta en una hora sin otra reserva.");
     }
   }
   function autoScroll() {
@@ -73,21 +83,13 @@ export default function CalendarTimeGrid({ dates, bookings, availability, rules,
     const booking = visible.find(b => b.id === id && b.status === "confirmed");
     if (!booking) return;
     const current = { booking, kind, originX: x, originY: y, x, y, active: false, targets: [], target: null, loading: true };
-    current.timer = setTimeout(async () => {
+    current.timer = setTimeout(() => {
       if (session.current !== current) return;
-      current.active = true; swipe.current = null; suppressUntil.current = Date.now() + 1000;
-      onDraggingChange(true); setDrag({ ...current }); setAnnouncement("Buscando horarios para reprogramar…");
+      current.active = true; current.loading = false; swipe.current = null; suppressUntil.current = Date.now() + 1000;
+      onDraggingChange(true); setDrag({ ...current });
+      setAnnouncement("Arrastra a cualquier hora libre. Suelta para guardar; Escape cancela.");
       frame.current = requestAnimationFrame(autoScroll);
-      try {
-        const rows = await Promise.all(dates.map(day => api("/admin/availability?day=" + day + "&service_id=" + booking.service_id + "&exclude=" + booking.id)));
-        if (session.current !== current || !mounted.current) return;
-        current.targets = rows.flat().filter(t => new Date(t.starts_at).getTime() !== new Date(booking.starts_at).getTime());
-        current.loading = false; setDrag({ ...current });
-        setAnnouncement(current.targets.length ? "Arrastra a un horario resaltado. Suelta para guardar; Escape cancela." : "No hay otro horario disponible en este período.");
-        updateTarget(current.x, current.y);
-      } catch (e) {
-        if (session.current === current && mounted.current) { stop(); onError(e.message); }
-      }
+      updateTarget(current.x, current.y);
     }, HOLD_MS);
     session.current = current;
   }
@@ -131,6 +133,7 @@ export default function CalendarTimeGrid({ dates, bookings, availability, rules,
       swipe.current = null;
       if (!gesture || busy || !e.changedTouches.length) return;
       const t = e.changedTouches[0], dx = t.clientX - gesture.x, dy = t.clientY - gesture.y;
+      if (Math.abs(dx) > 9 || Math.abs(dy) > 9) suppressUntil.current = Date.now() + 700;
       if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.5) {
         suppressUntil.current = Date.now() + 700; onNavigate(dx < 0 ? 1 : -1);
       }
@@ -190,8 +193,11 @@ export default function CalendarTimeGrid({ dates, bookings, availability, rules,
             ...visible.map(b => ({ ...b, key: b.id }))
           ].map(item => ({ ...item, ...segment(item.starts_at, item.ends_at, day, from, to) })).filter(e => e.end > e.start);
           const buffers = [...slots, ...visible.filter(b => ["confirmed", "held"].includes(b.status))].map(b => segment(b.ends_at, b.occupied_until, day, from, to)).filter(b => b.end > b.start);
-          const targetSlots = (drag?.targets || []).filter(t => dateKey(t.starts_at) === day);
+          const targetSlots = drag?.target && dateKey(drag.target.starts_at) === day ? [drag.target] : [];
           return <div key={day} data-calendar-day={day} className="calendar-day-column" style={{ height }}>
+            {Array.from({length: 48}, (_, i) => <button key={"free" + i} type="button" className="calendar-free-time" style={pos(i * 30, (i + 1) * 30)}
+              disabled={busy || loading} aria-label={"Reservar el " + day + " a las " + String(Math.floor(i / 2)).padStart(2, "0") + (i % 2 ? ":30" : ":00")}
+              onClick={e => pickTime(e, day, i * 30)} />)}
             {!plan.closed && <div className="calendar-shift" style={pos(minute(plan.shift_start), minute(plan.shift_end))} />}
             {Array.from({ length: (to - from) / 30 }, (_, i) => <div className={"calendar-rule " + (i % 2 ? "calendar-half-hour" : "")} key={i} style={{ top: i * 30 * SCALE }} />)}
             {!plan.closed && (plan.breaks || []).map((b, i) => <div className="calendar-break" key={"break" + i} style={pos(minute(b.start), minute(b.end))}><span>Pausa</span></div>)}
@@ -202,7 +208,7 @@ export default function CalendarTimeGrid({ dates, bookings, availability, rules,
               aria-label={clock(item.starts_at) + " – " + clock(item.ends_at) + " · " + (item.available ? "Disponible" : item.status === "blocked" ? "Bloqueo" : item.customer.first_name + " " + item.customer.last_name + " · " + labels[item.status])}
               className={"calendar-event " + (item.available ? "calendar-available" : "calendar-" + item.status) + (drag && drag.booking.id === item.id ? " calendar-drag-source" : "")}
               style={{ ...pos(item.start, item.end), left: "calc(" + (item.lane * 100 / item.lanes) + "% + 2px)", width: "calc(" + (100 / item.lanes) + "% - 4px)" }}
-              onClick={() => item.available ? onSlot(item) : onDetail(item)}>
+              onClick={e => item.available ? pickTime(e, day, item.start) : onDetail(item)}>
               <strong className="calendar-event-time">{clock(item.starts_at)}<span> – {clock(item.ends_at)}</span></strong>
               <span>{item.available ? "Disponible" : item.status === "blocked" ? "Bloqueo" : item.customer.first_name + " " + item.customer.last_name}</span>
               {!item.available && item.status !== "blocked" && <small>{item.snapshot.name}</small>}

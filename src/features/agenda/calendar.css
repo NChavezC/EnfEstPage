@@ -41,3 +41,5 @@
 .calendar-break{z-index:1}
 .calendar-help{font-size:13px;margin:8px 0}.calendar-help summary{cursor:pointer;min-height:24px}
 @media(max-width:760px){.agenda-admin{padding-top:12px}.agenda-admin>div:first-child h1{font-size:20px;margin:4px 0}.agenda-admin>div:first-child>div>div{font-size:9px}.agenda-admin>div:first-child>button{font-size:12px;padding:8px;white-space:nowrap}.agenda-admin nav[aria-label="Administración"]{flex-wrap:nowrap;overflow-x:auto;padding:10px 0;margin-bottom:12px;gap:4px;scrollbar-width:thin}.agenda-admin nav[aria-label="Administración"] button{flex-shrink:0;white-space:nowrap;font-size:13px;padding:10px;min-height:44px}.calendar-controls button{padding:10px 12px;font-size:14px}.calendar-controls input[type="date"]{width:145px;font-size:14px;padding:10px}.calendar-legend{font-size:11px;gap:7px}}
+
+.calendar-free-time{position:absolute;left:0;right:0;width:100%;cursor:pointer;background:transparent;border:0;z-index:1}.calendar-free-time:focus-visible{outline:2px solid #81435e;outline-offset:-2px}.calendar-shift,.calendar-closed{pointer-events:none}

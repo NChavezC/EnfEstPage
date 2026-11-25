@@ -37,7 +37,6 @@ try {
       else {await page.mouse.move(p.x,p.y);await page.mouse.down();}
       holding=true;
       await page.locator(".calendar-drag-toolbar").waitFor();
-      await page.locator("[data-drop-start]").first().waitFor();
       return p;
     }
     async function moveTo(p) {
@@ -52,10 +51,13 @@ try {
       holding=false;
     }
     async function aim(iso) {
-      const target=page.locator('[data-drop-start="'+iso+'"]');
-      await target.scrollIntoViewIfNeeded();const b=await target.boundingBox();
-      const view=await page.locator('[data-testid="week-calendar"]').boundingBox();
-      const p={x:b.x+b.width/2,y:Math.max(b.y+25,view.y+65)};await moveTo(p);
+      const parts = new Intl.DateTimeFormat("en-CA",{timeZone:"America/Santiago",year:"numeric",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit",hourCycle:"h23"}).formatToParts(new Date(iso));
+      const value=type=>parts.find(p=>p.type===type).value;
+      const day=value("year")+"-"+value("month")+"-"+value("day");
+      const minutes=Number(value("hour"))*60+Number(value("minute"));
+      await page.locator('[data-testid="week-calendar"]').evaluate((el,m)=>{el.scrollTop=m*1.25-100;},minutes);
+      const b=await page.locator('[data-calendar-day="'+day+'"]').boundingBox();
+      const p={x:b.x+b.width/2,y:b.y+minutes*1.25+1};await moveTo(p);
       await page.locator(".calendar-drop-selected").waitFor();return p;
     }
     async function row() {return (await call("/admin/bookings?start="+day+"&end="+plus(6))).find(b=>b.id===id);}
@@ -110,14 +112,14 @@ try {
       // Invalid destination and Escape must not change the booking.
       await startDrag();const closed=await page.locator('[data-calendar-day="'+plus(2)+'"]').boundingBox();
       const viewBox=await page.locator('[data-testid="week-calendar"]').boundingBox();
-      p={x:closed.x+closed.width/2,y:viewBox.y+100};await moveTo(p);await release(p);
+      p={x:closed.x+closed.width/2,y:viewBox.y-10};await moveTo(p);await release(p);
       assert.equal((await row()).revision,2);
       p=await startDrag();await page.keyboard.press("Escape");await release(p);assert.equal((await row()).revision,2);
       // Occupy a highlighted target after availability was fetched: the server must reject the drop.
       await startDrag();p=await aim(slots[0].starts_at);
-      blocker=(await call("/admin/blocks",{starts_at:slots[0].starts_at,ends_at:slots[0].occupied_until,reason:"GrillaPrueba"})).id;
+      blocker=(await call("/admin/bookings",{service_id:service.id,service_version:service.version,starts_at:slots[0].starts_at,customer:{first_name:"GrillaPruebaConflicto",last_name:"Prueba",email:"conflicto@example.invalid",phone:"+56912345678"}})).id;
       await release(p);
-      await page.getByRole("alert").filter({hasText:"Horario no disponible"}).waitFor();
+      await page.getByRole("alert").filter({hasText:"El horario se superpone"}).waitFor();
       assert.equal((await row()).revision,2);
       await call("/admin/bookings/"+blocker+"/cancel",{revision:1});blocker=null;
       const audit=(await call("/admin/operations")).audit.filter(a=>a.entity===id && a.action==="booking.moved");
